@@ -12,12 +12,17 @@ import morgan from 'morgan';
 import { config, isProd } from './config';
 import { logger } from './logger';
 import { createHealthRouter } from './routes/health';
+import { createSessionRouter } from './routes/sessions';
 import type { RoomManager } from './ws/roomManager';
+import type { SessionStore } from './ws/sessionStore';
 
-/** Builds the Express application (HTTP side: middleware, health, static client). */
-export function createApp(rooms: RoomManager): Express {
+/** Builds the Express application (HTTP side: middleware, health, API, static client). */
+export function createApp(rooms: RoomManager, store: SessionStore): Express {
   const app = express();
   app.disable('x-powered-by');
+  // Behind a reverse proxy (nginx): trust the first hop so X-Forwarded-* (real
+  // client IP in logs, req.protocol) are honored.
+  app.set('trust proxy', 1);
 
   // Security headers. CSP is disabled because the built SPA + CodeMirror rely on
   // inline styles/workers that a strict default policy would block; the other
@@ -25,8 +30,11 @@ export function createApp(rooms: RoomManager): Express {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(compression());
   app.use(morgan(isProd ? 'combined' : 'dev'));
+  app.use(express.json());
 
   app.use('/', createHealthRouter(rooms));
+  // Admin auth + session API. Must come before the SPA catch-all below.
+  app.use('/', createSessionRouter(rooms, store));
 
   // Serve the built client in production. In dev the client is served by Vite
   // on :5173, so this is a no-op (the build simply won't exist).

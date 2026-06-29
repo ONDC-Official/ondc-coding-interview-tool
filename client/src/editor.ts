@@ -4,7 +4,7 @@ import { javascript } from '@codemirror/lang-javascript';
 import { java } from '@codemirror/lang-java';
 import { cpp } from '@codemirror/lang-cpp';
 
-export type LanguageId = 'python' | 'javascript' | 'java' | 'cpp';
+export type LanguageId = 'python' | 'javascript' | 'java' | 'cpp' | 'text';
 
 export interface LanguageOption {
   value: LanguageId;
@@ -18,6 +18,7 @@ export const LANGUAGES: LanguageOption[] = [
   { value: 'javascript', label: 'JavaScript' },
   { value: 'java', label: 'Java' },
   { value: 'cpp', label: 'C++' },
+  { value: 'text', label: 'Plain Text (.txt)' },
 ];
 
 export const DEFAULT_LANGUAGE: LanguageId = 'python';
@@ -31,6 +32,9 @@ export function langExtension(value: string): Extension {
       return java();
     case 'cpp':
       return cpp();
+    case 'text':
+      // Plain text: no language extension, so no syntax highlighting.
+      return [];
     case 'javascript':
     default:
       return javascript();

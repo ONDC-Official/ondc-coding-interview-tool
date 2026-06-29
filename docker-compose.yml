@@ -12,6 +12,8 @@ services:
       HOST: "0.0.0.0"
       PORT: "1234"
       MAX_USERS_PER_ROOM: "2"
+      ADMIN_USERNAME: "admin"
+      ADMIN_PASSWORD: "ONDC@0001"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1234/healthz"]
       interval: 30s

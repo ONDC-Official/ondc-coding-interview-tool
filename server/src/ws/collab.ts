@@ -3,10 +3,13 @@ import type { Duplex } from 'stream';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { config } from '../config';
 import { logger } from '../logger';
-import { RoomManager } from './roomManager';
+import type { RoomManager } from './roomManager';
+import type { SessionStore } from './sessionStore';
 
 /** App-specific WebSocket close code: room already has the max number of peers. */
 export const ROOM_FULL_CODE = 4001;
+/** App-specific WebSocket close code: room was not created by an admin (or ended). */
+export const ROOM_NOT_FOUND_CODE = 4004;
 
 // y-websocket ships its server helpers as an untyped deep CommonJS export
 // (only reachable via the package "exports" map as `y-websocket/bin/utils`).
@@ -25,16 +28,27 @@ function roomFromUrl(url: string | undefined): string {
 }
 
 /**
- * Wires Yjs collaborative sync onto an existing HTTP server and enforces the
- * per-room user cap. Returns the RoomManager so the rest of the app (e.g. the
- * health endpoint) can report presence.
+ * Wires Yjs collaborative sync onto an existing HTTP server. Rejects rooms that
+ * weren't created by an admin and enforces the per-room user cap. The
+ * RoomManager and SessionStore are owned by the caller (index.ts) so the HTTP
+ * API can share them.
  */
-export function attachCollab(server: HttpServer): RoomManager {
-  const rooms = new RoomManager(config.maxUsersPerRoom);
+export function attachCollab(
+  server: HttpServer,
+  rooms: RoomManager,
+  store: SessionStore
+): void {
   const wss = new WebSocketServer({ noServer: true });
 
   wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
     const room = roomFromUrl(req.url);
+
+    // Only admin-created (and not-yet-ended) sessions are joinable.
+    if (!store.has(room)) {
+      logger.warn(`Rejected peer for unknown room "${room}"`);
+      ws.close(ROOM_NOT_FOUND_CODE, 'Session not found');
+      return;
+    }
 
     // Enforce the cap BEFORE binding the socket to the CRDT document.
     if (!rooms.canJoin(room)) {
@@ -59,6 +73,4 @@ export function attachCollab(server: HttpServer): RoomManager {
       wss.emit('connection', ws, req);
     });
   });
-
-  return rooms;
 }

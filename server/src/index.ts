@@ -3,15 +3,22 @@ import { config } from './config';
 import { logger } from './logger';
 import { createApp } from './app';
 import { attachCollab } from './ws/collab';
+import { RoomManager } from './ws/roomManager';
+import { SessionStore } from './ws/sessionStore';
 
 function main(): void {
   const server = http.createServer();
 
-  // WebSocket collaborative sync + per-room cap (adds the 'upgrade' handler).
-  const rooms = attachCollab(server);
+  // Shared state: live per-room connection counts + the admin-created session
+  // registry. Both are used by the WS layer and the HTTP API.
+  const rooms = new RoomManager(config.maxUsersPerRoom);
+  const store = new SessionStore();
 
-  // HTTP app (static client + health). Attach as the 'request' handler.
-  const app = createApp(rooms);
+  // WebSocket collaborative sync + per-room cap (adds the 'upgrade' handler).
+  attachCollab(server, rooms, store);
+
+  // HTTP app (static client + health + admin/session API). Attach as 'request'.
+  const app = createApp(rooms, store);
   server.on('request', app);
 
   server.listen(config.port, config.host, () => {

@@ -1,0 +1,51 @@
+# Reverse proxy for the ONDC coding interview tool.
+# Terminates TLS and forwards both HTTP and WebSocket (Yjs sync) to the app on
+# :1234. Copy to /etc/nginx/sites-available/, edit server_name + cert paths,
+# enable, then `nginx -t && systemctl reload nginx`.
+
+# Maps the Upgrade header so WebSocket connections are proxied correctly.
+map $http_upgrade $connection_upgrade {
+  default upgrade;
+  ''      close;
+}
+
+# HTTP -> HTTPS redirect.
+server {
+  listen 80;
+  server_name interview.example.com;        # <-- your domain
+  location / { return 301 https://$host$request_uri; }
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name interview.example.com;         # <-- your domain
+
+  # TLS certs (e.g. from certbot / Let's Encrypt).
+  ssl_certificate     /etc/letsencrypt/live/interview.example.com/fullchain.pem;
+  ssl_certificate_key /etc/letsencrypt/live/interview.example.com/privkey.pem;
+
+  location / {
+    # nginx runs on a SEPARATE host: point this at the app server's address.
+    # Use its PRIVATE IP (same VPC) and lock port 1234 in the app host's
+    # security group / firewall to allow ONLY this nginx host. (If nginx were on
+    # the same host, this would be http://127.0.0.1:1234.)
+    proxy_pass http://APP_PRIVATE_IP:1234;     # <-- app server IP
+    proxy_http_version 1.1;
+
+    # WebSocket upgrade. The Yjs sync socket connects to wss://<host>/<roomId>,
+    # i.e. the same path namespace as the app, so this single block covers it.
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;
+
+    # Real client info (pairs with `trust proxy` set in the Express app).
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+
+    # Long-lived collaborative sockets: don't drop them while idle.
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
+  }
+}

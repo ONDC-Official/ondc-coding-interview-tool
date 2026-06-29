@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import path from 'path';
 
 function envInt(name: string, fallback: number): number {
@@ -18,6 +19,14 @@ export const config = {
   host: process.env.HOST ?? '0.0.0.0',
   /** Hard cap of concurrent peers per room, enforced server-side. */
   maxUsersPerRoom: envInt('MAX_USERS_PER_ROOM', 2),
+  /**
+   * Admin credentials gating session creation. Hardcoded fallbacks here so the
+   * app works out of the box (incl. Docker); override via .env / env vars.
+   */
+  adminUsername: process.env.ADMIN_USERNAME ?? 'admin',
+  adminPassword: process.env.ADMIN_PASSWORD ?? 'ONDC@0001',
+  /** Admin login token lifetime (in-memory). Default 12h. */
+  tokenTtlMs: envInt('ADMIN_TOKEN_TTL_MIN', 720) * 60_000,
   /**
    * Path to the built client. Defaults to ../../client/dist relative to the
    * compiled server (server/dist/ -> repo/client/dist). Override with CLIENT_DIST.

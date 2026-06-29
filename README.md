@@ -7,20 +7,26 @@ conflict-free, with each other's cursor and selection visible.
 
 ## Features
 
+- **Admin-gated sessions.** Only an admin (username/password) can create a
+  session; the secret link is then shared with one candidate who joins without
+  logging in. An **admin dashboard** lists live sessions with their connection
+  counts and lets the admin copy/open/end each.
 - **Single shared file**, full-screen editor. No file tree, no tabs.
 - **Syntax highlighting** with a language selector: Python, JavaScript, Java,
-  C++. Switching language updates highlighting for **both** users in real time
-  (the choice is part of the shared document).
+  C++, and Plain Text (`.txt`). Switching language updates highlighting for
+  **both** users in real time (the choice is part of the shared document).
 - **Conflict-free collaborative editing** via [Yjs](https://yjs.dev) (a CRDT) —
   no full-document broadcasts, no lost keystrokes or cursor jumping when both
   type at once.
 - **Remote cursors & selections** shown in each user's distinct color.
 - **Secret room IDs** in the URL (e.g. `/s/Ab3xY7Qz...`, 16 random base62
-  chars). Anyone with the link joins; without it the room can't be found.
+  chars), minted server-side only by an admin. Anyone with the link joins; an
+  unknown link is rejected ("Session not found").
 - **Hard cap of 2 users per room, enforced on the server.** A third visitor is
   rejected with a clear "Session is full" screen and never joins the document.
 - **Presence indicator** ("2/2 connected") plus connection status.
-- **Landing page** with "Create new session"; **Copy link** button in-session.
+- **Admin dashboard** to create sessions and monitor live ones; **Copy link**
+  button in-session.
 
 ## Tech
 
@@ -67,7 +73,8 @@ dev server on `:5173` together:
 npm run dev
 ```
 
-Then open **http://localhost:5173** and click **Create new session**.
+Then open **http://localhost:5173**, sign in at `/login` (`admin` /
+`ONDC@0001`), and click **Create new session** on the dashboard.
 
 To test collaboration, open the resulting `/s/...` link in a second browser
 window. Open it in a **third** window to see the "Session is full" rejection.
@@ -93,6 +100,26 @@ Backend (`server/`) env vars:
 - `MAX_USERS_PER_ROOM` — per-room cap (default `2`).
 - `CLIENT_DIST` — path to the built client (default `../client/dist`).
 - `NODE_ENV` — `production` enables combined logging.
+- `ADMIN_USERNAME` / `ADMIN_PASSWORD` — admin login that gates session creation
+  (defaults `admin` / `ONDC@0001`, also set in `server/.env`).
+- `ADMIN_TOKEN_TTL_MIN` — admin login token lifetime in minutes (default `720`).
+
+The server reads `server/.env` (via `dotenv`); copy `server/.env.example` to
+`server/.env` to override the built-in defaults.
+
+## Admin & sessions
+
+- Open the app → you're sent to **`/login`**. Sign in with the admin
+  credentials → **`/admin`** dashboard.
+- Click **Create new session** to mint a secret room and copy its `/s/<id>`
+  link; share it with the candidate (no login needed to join).
+- The server only accepts WebSocket connections to **admin-created** rooms;
+  unknown/ended links show a "Session not found" screen (close code `4004`).
+- Sessions live in memory — they're lost on server restart (admin must re-login
+  and re-create), matching the already-ephemeral CRDT documents.
+
+API: `POST /api/login` → `{ token }`; `POST /api/sessions`, `GET /api/sessions`,
+`DELETE /api/sessions/:roomId` (all require `Authorization: Bearer <token>`).
 
 Frontend (`client/`) env vars (Vite):
 
@@ -115,6 +142,24 @@ Run it locally:
 docker compose up --build
 # open http://localhost:1234
 ```
+
+## Behind nginx (reverse proxy)
+
+No app code changes are needed: the client uses a **same-origin** WebSocket
+(`wss://<your-domain>/<roomId>`) and auth is header-based (no cookies), so it
+works through a TLS-terminating proxy. The app sets `trust proxy` so
+`X-Forwarded-*` are honored.
+
+- Use `nginx.conf.example` (root). It terminates TLS and **must forward the
+  WebSocket upgrade** (the `Upgrade`/`Connection` headers + the `map` block) and
+  use long `proxy_read_timeout`/`proxy_send_timeout` for the long-lived sync
+  socket.
+- **Lock down port `1234`** so traffic only flows through nginx:
+  - nginx on the **same host** → bind the published port to localhost
+    (`"127.0.0.1:1234:1234"` in `docker-compose.yml`).
+  - nginx on a **separate host** → keep `1234` published but restrict it in the
+    app host's security group/firewall to nginx's IP only, and set
+    `proxy_pass` to the app's private IP.
 
 ## How it works
 

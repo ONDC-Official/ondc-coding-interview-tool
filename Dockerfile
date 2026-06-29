@@ -22,6 +22,8 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=1234 \
     MAX_USERS_PER_ROOM=2 \
+    ADMIN_USERNAME=admin \
+    ADMIN_PASSWORD=ONDC@0001 \
     CLIENT_DIST=/app/client/dist
 WORKDIR /app/server
 

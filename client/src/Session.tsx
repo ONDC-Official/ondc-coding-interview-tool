@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { Brand } from './Brand';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
@@ -21,6 +21,8 @@ import {
 
 // Server close code used to signal "room already has 2 people".
 const ROOM_FULL_CODE = 4001;
+// Server close code: room was never created by an admin, or has been ended.
+const ROOM_NOT_FOUND_CODE = 4004;
 
 type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
@@ -33,6 +35,7 @@ export default function Session() {
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [peers, setPeers] = useState(1);
   const [full, setFull] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -81,11 +84,14 @@ export default function Session() {
     const onStatus = (e: { status: ConnectionStatus }) => setStatus(e.status);
     provider.on('status', onStatus);
 
-    // The server closes with ROOM_FULL_CODE when a 3rd peer joins. Stop the
-    // provider's auto-reconnect and show the "full" screen.
+    // The server closes with a custom code to reject a connection: ROOM_FULL_CODE
+    // for a 3rd peer, ROOM_NOT_FOUND_CODE for a room no admin created. In both
+    // cases stop auto-reconnect and show the matching screen.
     const onClose = (event: CloseEvent) => {
-      if (event && event.code === ROOM_FULL_CODE) {
-        setFull(true);
+      if (!event) return;
+      if (event.code === ROOM_FULL_CODE || event.code === ROOM_NOT_FOUND_CODE) {
+        if (event.code === ROOM_FULL_CODE) setFull(true);
+        else setNotFound(true);
         provider.shouldConnect = false;
         provider.disconnect();
       }
@@ -124,6 +130,23 @@ export default function Session() {
     setTimeout(() => setCopied(false), 1500);
   };
 
+  if (notFound) {
+    return (
+      <div className="landing">
+        <div className="landing-card">
+          <div className="landing-brand">
+            <Brand size={40} stacked />
+          </div>
+          <h2 className="full-title">Session not found</h2>
+          <p className="tagline">
+            This link is invalid or the session has ended. Ask the interviewer
+            for a fresh link.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (full) {
     return (
       <div className="landing">
@@ -136,9 +159,6 @@ export default function Session() {
             This room already has 2 people. Sessions are limited to two
             participants.
           </p>
-          <Link className="btn btn-primary" to="/">
-            Create your own session
-          </Link>
         </div>
       </div>
     );
