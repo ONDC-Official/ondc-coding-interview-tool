@@ -1,0 +1,176 @@
+import { useEffect, useRef, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { Brand } from './Brand.jsx';
+import * as Y from 'yjs';
+import { WebsocketProvider } from 'y-websocket';
+import { yCollab } from 'y-codemirror.next';
+import { EditorState, Compartment } from '@codemirror/state';
+import { EditorView, keymap } from '@codemirror/view';
+import { indentWithTab } from '@codemirror/commands';
+import { basicSetup } from 'codemirror';
+import { oneDark } from '@codemirror/theme-one-dark';
+import {
+  LANGUAGES,
+  DEFAULT_LANGUAGE,
+  langExtension,
+  makeLocalUser,
+  WS_URL,
+} from './editor.js';
+
+// Server close code used to signal "room already has 2 people".
+const ROOM_FULL_CODE = 4001;
+
+export default function Session() {
+  const { roomId } = useParams();
+  const editorParent = useRef(null);
+  const viewRef = useRef(null);
+  const ymetaRef = useRef(null);
+
+  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
+  const [status, setStatus] = useState('connecting'); // connecting | connected | disconnected
+  const [peers, setPeers] = useState(1);
+  const [full, setFull] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    const ydoc = new Y.Doc();
+    const ytext = ydoc.getText('codemirror');
+    const ymeta = ydoc.getMap('meta');
+    ymetaRef.current = ymeta;
+
+    const provider = new WebsocketProvider(WS_URL, roomId, ydoc);
+    const awareness = provider.awareness;
+    awareness.setLocalStateField('user', makeLocalUser());
+
+    const languageConf = new Compartment();
+
+    const state = EditorState.create({
+      doc: '',
+      extensions: [
+        basicSetup,
+        keymap.of([indentWithTab]),
+        oneDark,
+        EditorView.lineWrapping,
+        languageConf.of(langExtension(ymeta.get('language') || DEFAULT_LANGUAGE)),
+        yCollab(ytext, awareness),
+      ],
+    });
+
+    const view = new EditorView({ state, parent: editorParent.current });
+    viewRef.current = view;
+
+    // Language lives in the shared doc, so a change by either peer (or the
+    // already-synced state seen by a late joiner) updates both editors.
+    const applyLanguage = () => {
+      const lang = ymeta.get('language') || DEFAULT_LANGUAGE;
+      setLanguage(lang);
+      view.dispatch({ effects: languageConf.reconfigure(langExtension(lang)) });
+    };
+    ymeta.observe(applyLanguage);
+    applyLanguage();
+
+    // Presence: awareness states = number of connected peers (incl. self).
+    const updatePeers = () => setPeers(awareness.getStates().size);
+    awareness.on('change', updatePeers);
+    updatePeers();
+
+    const onStatus = (e) => setStatus(e.status);
+    provider.on('status', onStatus);
+
+    // The server closes with ROOM_FULL_CODE when a 3rd peer joins. Stop the
+    // provider's auto-reconnect and show the "full" screen.
+    const onClose = (event) => {
+      if (event && event.code === ROOM_FULL_CODE) {
+        setFull(true);
+        provider.shouldConnect = false;
+        provider.disconnect();
+      }
+    };
+    provider.on('connection-close', onClose);
+
+    return () => {
+      ymeta.unobserve(applyLanguage);
+      awareness.off('change', updatePeers);
+      provider.off('status', onStatus);
+      provider.off('connection-close', onClose);
+      view.destroy();
+      provider.destroy();
+      ydoc.destroy();
+    };
+  }, [roomId]);
+
+  const onLanguageChange = (e) => {
+    // Write to the shared doc; the observer above updates both editors.
+    ymetaRef.current?.set('language', e.target.value);
+  };
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+    } catch {
+      // Fallback for non-secure contexts.
+      const ta = document.createElement('textarea');
+      ta.value = window.location.href;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  if (full) {
+    return (
+      <div className="landing">
+        <div className="landing-card">
+          <div className="landing-brand">
+            <Brand size={40} stacked />
+          </div>
+          <h2 className="full-title">Session is full</h2>
+          <p className="tagline">
+            This room already has 2 people. Sessions are limited to two
+            participants.
+          </p>
+          <Link className="btn btn-primary" to="/">
+            Create your own session
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const connected = status === 'connected';
+
+  return (
+    <div className="session">
+      <header className="topbar">
+        <div className="topbar-left">
+          <Brand size={26} />
+          <label className="lang-select">
+            <span className="lang-label">Language</span>
+            <select value={language} onChange={onLanguageChange}>
+              {LANGUAGES.map((l) => (
+                <option key={l.value} value={l.value}>
+                  {l.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
+        <div className="topbar-right">
+          <span className={`presence ${connected ? 'ok' : 'bad'}`}>
+            <span className="dot" />
+            {connected ? `${peers}/2 connected` : status}
+          </span>
+          <button className="btn btn-ghost" onClick={copyLink}>
+            {copied ? 'Copied!' : 'Copy link'}
+          </button>
+        </div>
+      </header>
+
+      <main className="editor-wrap" ref={editorParent} />
+    </div>
+  );
+}
