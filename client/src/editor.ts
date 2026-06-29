@@ -1,21 +1,29 @@
+import type { Extension } from '@codemirror/state';
 import { python } from '@codemirror/lang-python';
 import { javascript } from '@codemirror/lang-javascript';
 import { java } from '@codemirror/lang-java';
 import { cpp } from '@codemirror/lang-cpp';
 
+export type LanguageId = 'python' | 'javascript' | 'java' | 'cpp';
+
+export interface LanguageOption {
+  value: LanguageId;
+  label: string;
+}
+
 // Languages offered in the selector. `value` is what gets stored in the shared
 // Yjs doc so both peers resolve to the same highlighting.
-export const LANGUAGES = [
+export const LANGUAGES: LanguageOption[] = [
   { value: 'python', label: 'Python' },
   { value: 'javascript', label: 'JavaScript' },
   { value: 'java', label: 'Java' },
   { value: 'cpp', label: 'C++' },
 ];
 
-export const DEFAULT_LANGUAGE = 'python';
+export const DEFAULT_LANGUAGE: LanguageId = 'python';
 
 // Returns the CodeMirror language extension for a stored language value.
-export function langExtension(value) {
+export function langExtension(value: string): Extension {
   switch (value) {
     case 'python':
       return python();
@@ -32,15 +40,21 @@ export function langExtension(value) {
 // WebSocket backend URL.
 //  - VITE_WS_URL (optional) is an explicit override.
 //  - In dev the backend runs on its own port (default 1234). We derive the host
-//    from the page URL so it works whether you open localhost OR a LAN IP
-//    (e.g. http://192.168.x.x:5173 -> ws://192.168.x.x:1234).
+//    from the page URL so it works whether you open localhost OR a LAN/remote IP
+//    (e.g. http://13.233.69.163:5173 -> ws://13.233.69.163:1234).
 //  - In a production build the single server serves both, so use same origin.
 const WS_PORT = import.meta.env.VITE_WS_PORT || '1234';
-export const WS_URL =
+export const WS_URL: string =
   import.meta.env.VITE_WS_URL ||
   (import.meta.env.DEV
     ? `ws://${location.hostname}:${WS_PORT}`
     : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
+
+export interface LocalUser {
+  name: string;
+  color: string;
+  colorLight: string;
+}
 
 // Distinct, readable colors for remote cursors/selections on a dark theme.
 const USER_COLORS = [
@@ -55,12 +69,12 @@ const USER_COLORS = [
 const ADJECTIVES = ['Quick', 'Calm', 'Brave', 'Sharp', 'Witty', 'Bright'];
 const ANIMALS = ['Fox', 'Owl', 'Lynx', 'Wolf', 'Hawk', 'Otter'];
 
-function pick(arr) {
+function pick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
 // A random identity for this tab: a friendly name + a cursor color.
-export function makeLocalUser() {
+export function makeLocalUser(): LocalUser {
   const c = pick(USER_COLORS);
   return {
     name: `${pick(ADJECTIVES)} ${pick(ANIMALS)}`,

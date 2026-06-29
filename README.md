@@ -26,8 +26,25 @@ conflict-free, with each other's cursor and selection visible.
 
 - Editor: **CodeMirror 6**
 - Shared state: **Yjs** + `y-websocket` provider + `y-codemirror.next` binding
-- Backend: **Node.js** — `y-websocket` server, 2-user cap, serves the frontend
-- Frontend: **React + Vite**, dark theme
+- **Frontend** (`client/`): **React + Vite + TypeScript**, dark theme
+- **Backend** (`server/`): **Express + TypeScript** — runs the `y-websocket`
+  sync server, enforces the 2-user cap, and serves the built client
+
+## Project structure
+
+```
+.
+├── client/            # React + Vite + TS frontend
+│   └── src/           #   Landing, Session, editor, brand
+├── server/            # Express + TS backend
+│   └── src/           #   index, app, config, logger, ws/, routes/
+├── deploy/            # pm2 ecosystem config used on the EC2
+├── .github/workflows/ # CI/CD: deploy.yml
+└── package.json       # root orchestrator scripts (uses workspaces' two projects)
+```
+
+The frontend and backend are independent npm projects (own `package.json` /
+lockfile). The root `package.json` provides convenience scripts that drive both.
 
 ## Prerequisites
 
@@ -36,13 +53,14 @@ conflict-free, with each other's cursor and selection visible.
 ## Install
 
 ```bash
-npm install
+npm install            # root tooling (concurrently)
+npm run install:all    # installs client/ and server/ deps
 ```
 
 ## Run locally (development, with hot reload)
 
-Starts the WebSocket backend on `:1234` and the Vite dev server on `:5173`
-together:
+Starts the Express/y-websocket backend on `:1234` (via `tsx watch`) and the Vite
+dev server on `:5173` together:
 
 ```bash
 npm run dev
@@ -55,8 +73,8 @@ window. Open it in a **third** window to see the "Session is full" rejection.
 
 ## Run locally (production build, single server)
 
-Build the frontend, then start the Node server which serves it and handles
-WebSocket sync on the same port:
+Build both projects, then start the server which serves the built client and
+handles WebSocket sync on the same port:
 
 ```bash
 npm run build
@@ -67,10 +85,44 @@ Then open **http://localhost:1234**.
 
 ## Configuration
 
-- `PORT` — backend port (default `1234`), e.g. `PORT=3000 npm start`.
-- `VITE_WS_URL` — WebSocket URL the frontend connects to. Set in
-  `.env.development` for dev (`ws://localhost:1234`). Unset in a production
-  build, so the client uses the same origin that served the page.
+Backend (`server/`) env vars:
+
+- `PORT` — port serving HTTP + WebSocket (default `1234`).
+- `HOST` — bind address (default `0.0.0.0`).
+- `MAX_USERS_PER_ROOM` — per-room cap (default `2`).
+- `CLIENT_DIST` — path to the built client (default `../client/dist`).
+- `NODE_ENV` — `production` enables combined logging.
+
+Frontend (`client/`) env vars (Vite):
+
+- `VITE_WS_URL` — explicit WebSocket URL override (optional).
+- `VITE_WS_PORT` — dev backend port (default `1234`). In dev the client derives
+  the WS host from the page URL, so localhost **and** a LAN/remote IP both work.
+  In a production build it uses the same origin that served the page.
+
+Health check: `GET /healthz` returns `{ status, uptimeSeconds, rooms, connections }`.
+
+## Deployment (GitHub Actions → EC2)
+
+On push to `main`, `.github/workflows/deploy.yml` builds both projects, ships the
+artifact to the workbench EC2, installs production deps, and (re)starts the app
+with **pm2** (`deploy/ecosystem.config.cjs`). The app is served directly on port
+`1234`.
+
+Required repo secrets (Settings → Secrets and variables → Actions):
+
+| Secret        | Value                              |
+| ------------- | ---------------------------------- |
+| `EC2_HOST`    | `13.233.69.163`                    |
+| `EC2_USER`    | `ubuntu`                           |
+| `EC2_SSH_KEY` | contents of the `.pem` private key |
+
+`EC2_HOST` and `EC2_USER` are already set via CLI. **Add `EC2_SSH_KEY` manually**
+(paste the full PEM), then re-run the workflow. Until it's set, CI builds but
+skips the deploy step.
+
+EC2 prerequisites: Node 18+ and pm2 installed; security-group **inbound TCP
+`1234`** open. After deploy, the app is at **http://13.233.69.163:1234**.
 
 ## How it works
 

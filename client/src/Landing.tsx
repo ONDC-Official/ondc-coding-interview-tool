@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { customAlphabet } from 'nanoid';
-import { Brand } from './Brand.jsx';
+import { Brand } from './Brand';
 
 // Base62, length 16 -> ~95 bits of entropy. Hard to guess / enumerate.
 const newRoomId = customAlphabet(

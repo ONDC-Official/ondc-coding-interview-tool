@@ -1,0 +1,87 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once; cancel an in-flight one if a newer push lands.
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      # Deploy steps run only when the SSH key secret is present, so the first
+      # push (before you add EC2_SSH_KEY) still passes — it just builds.
+      HAS_SSH_KEY: ${{ secrets.EC2_SSH_KEY != '' }}
+      DEPLOY_DIR: /home/ubuntu/ondc-coding-interview-tool
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            server/package-lock.json
+
+      - name: Build client
+        run: |
+          npm ci --prefix client
+          npm run build --prefix client
+
+      - name: Build server
+        run: |
+          npm ci --prefix server
+          npm run build --prefix server
+
+      - name: Assemble release artifact
+        run: |
+          rm -rf release
+          mkdir -p release/server release/client
+          cp -r server/dist                release/server/dist
+          cp    server/package.json        release/server/package.json
+          cp    server/package-lock.json   release/server/package-lock.json
+          cp -r client/dist                release/client/dist
+          cp    deploy/ecosystem.config.cjs release/ecosystem.config.cjs
+
+      - name: Configure SSH
+        if: env.HAS_SSH_KEY == 'true'
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/deploy_key.pem
+          chmod 600 ~/.ssh/deploy_key.pem
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Sync files to EC2
+        if: env.HAS_SSH_KEY == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key.pem "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "mkdir -p ${DEPLOY_DIR}"
+          rsync -az --delete --exclude 'node_modules' \
+            -e "ssh -i ~/.ssh/deploy_key.pem" \
+            release/ "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${DEPLOY_DIR}/"
+
+      - name: Install prod deps & (re)start with pm2
+        if: env.HAS_SSH_KEY == 'true'
+        run: |
+          ssh -i ~/.ssh/deploy_key.pem "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "bash -se" <<'EOSSH'
+            set -euo pipefail
+            DEPLOY_DIR="/home/ubuntu/ondc-coding-interview-tool"
+            cd "$DEPLOY_DIR/server"
+            npm ci --omit=dev
+            cd "$DEPLOY_DIR"
+            pm2 startOrReload ecosystem.config.cjs --update-env
+            pm2 save
+          EOSSH
+
+      - name: Note (no SSH key yet)
+        if: env.HAS_SSH_KEY != 'true'
+        run: |
+          echo "::warning::EC2_SSH_KEY secret is not set — built successfully but skipped deploy."
+          echo "Add the PEM as the EC2_SSH_KEY repo secret, then re-run this workflow."

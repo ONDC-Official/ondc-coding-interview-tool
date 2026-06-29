@@ -4,7 +4,7 @@
 // ONDC = Open Network for Digital Commerce. It is an original, on-theme mark;
 // swap in the official ONDC logo asset here if you have it.
 
-export function OndcMark({ size = 30 }) {
+export function OndcMark({ size = 30 }: { size?: number }) {
   return (
     <svg
       width={size}
@@ -40,8 +40,14 @@ export function OndcMark({ size = 30 }) {
   );
 }
 
+interface BrandProps {
+  size?: number;
+  subtitle?: string;
+  stacked?: boolean;
+}
+
 // Full lockup: mark + "ONDC" wordmark + product name.
-export function Brand({ size = 30, subtitle = 'Coding Interview', stacked = false }) {
+export function Brand({ size = 30, subtitle = 'Coding Interview', stacked = false }: BrandProps) {
   return (
     <span className={`brand-lockup${stacked ? ' stacked' : ''}`}>
       <OndcMark size={size} />

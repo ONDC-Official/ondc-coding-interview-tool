@@ -2,38 +2,19 @@
   "name": "ondc-coding-interview-tool",
   "private": true,
   "version": "1.0.0",
-  "type": "module",
-  "description": "ONDC — minimal real-time collaborative code editor for 1:1 DSA interviews",
+  "description": "ONDC — real-time collaborative code editor for 1:1 DSA interviews (client + server)",
   "scripts": {
-    "dev": "concurrently -n server,client -c blue,magenta \"npm:dev:server\" \"npm:dev:client\"",
-    "dev:server": "node server/server.cjs",
-    "dev:client": "vite",
-    "build": "vite build",
-    "start": "node server/server.cjs"
-  },
-  "dependencies": {
-    "@codemirror/commands": "^6.6.0",
-    "@codemirror/lang-cpp": "^6.0.2",
-    "@codemirror/lang-java": "^6.0.1",
-    "@codemirror/lang-javascript": "^6.2.2",
-    "@codemirror/lang-python": "^6.1.6",
-    "@codemirror/state": "^6.4.1",
-    "@codemirror/theme-one-dark": "^6.1.2",
-    "@codemirror/view": "^6.28.0",
-    "codemirror": "^6.0.1",
-    "express": "^4.19.2",
-    "nanoid": "^5.0.7",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.24.0",
-    "y-codemirror.next": "^0.3.5",
-    "y-websocket": "^1.5.4",
-    "yjs": "^13.6.18",
-    "ws": "^8.17.1"
+    "install:all": "npm install --prefix client && npm install --prefix server",
+    "dev": "concurrently -n client,server -c magenta,blue \"npm:dev:client\" \"npm:dev:server\"",
+    "dev:client": "npm run dev --prefix client",
+    "dev:server": "npm run dev --prefix server",
+    "build": "npm run build --prefix client && npm run build --prefix server",
+    "build:client": "npm run build --prefix client",
+    "build:server": "npm run build --prefix server",
+    "typecheck": "npm run typecheck --prefix client && npm run typecheck --prefix server",
+    "start": "npm run start --prefix server"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.1",
-    "concurrently": "^8.2.2",
-    "vite": "^5.3.1"
+    "concurrently": "^8.2.2"
   }
 }

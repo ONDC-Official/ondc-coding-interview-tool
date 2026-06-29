@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Brand } from './Brand.jsx';
+import { Brand } from './Brand';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { yCollab } from 'y-codemirror.next';
@@ -15,27 +16,31 @@ import {
   langExtension,
   makeLocalUser,
   WS_URL,
-} from './editor.js';
+  type LanguageId,
+} from './editor';
 
 // Server close code used to signal "room already has 2 people".
 const ROOM_FULL_CODE = 4001;
 
-export default function Session() {
-  const { roomId } = useParams();
-  const editorParent = useRef(null);
-  const viewRef = useRef(null);
-  const ymetaRef = useRef(null);
+type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
-  const [language, setLanguage] = useState(DEFAULT_LANGUAGE);
-  const [status, setStatus] = useState('connecting'); // connecting | connected | disconnected
+export default function Session() {
+  const { roomId } = useParams<{ roomId: string }>();
+  const editorParent = useRef<HTMLDivElement>(null);
+  const ymetaRef = useRef<Y.Map<string> | null>(null);
+
+  const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE);
+  const [status, setStatus] = useState<ConnectionStatus>('connecting');
   const [peers, setPeers] = useState(1);
   const [full, setFull] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (!roomId || !editorParent.current) return;
+
     const ydoc = new Y.Doc();
     const ytext = ydoc.getText('codemirror');
-    const ymeta = ydoc.getMap('meta');
+    const ymeta = ydoc.getMap<string>('meta');
     ymetaRef.current = ymeta;
 
     const provider = new WebsocketProvider(WS_URL, roomId, ydoc);
@@ -57,12 +62,11 @@ export default function Session() {
     });
 
     const view = new EditorView({ state, parent: editorParent.current });
-    viewRef.current = view;
 
     // Language lives in the shared doc, so a change by either peer (or the
     // already-synced state seen by a late joiner) updates both editors.
     const applyLanguage = () => {
-      const lang = ymeta.get('language') || DEFAULT_LANGUAGE;
+      const lang = (ymeta.get('language') as LanguageId) || DEFAULT_LANGUAGE;
       setLanguage(lang);
       view.dispatch({ effects: languageConf.reconfigure(langExtension(lang)) });
     };
@@ -74,12 +78,12 @@ export default function Session() {
     awareness.on('change', updatePeers);
     updatePeers();
 
-    const onStatus = (e) => setStatus(e.status);
+    const onStatus = (e: { status: ConnectionStatus }) => setStatus(e.status);
     provider.on('status', onStatus);
 
     // The server closes with ROOM_FULL_CODE when a 3rd peer joins. Stop the
     // provider's auto-reconnect and show the "full" screen.
-    const onClose = (event) => {
+    const onClose = (event: CloseEvent) => {
       if (event && event.code === ROOM_FULL_CODE) {
         setFull(true);
         provider.shouldConnect = false;
@@ -99,7 +103,7 @@ export default function Session() {
     };
   }, [roomId]);
 
-  const onLanguageChange = (e) => {
+  const onLanguageChange = (e: ChangeEvent<HTMLSelectElement>) => {
     // Write to the shared doc; the observer above updates both editors.
     ymetaRef.current?.set('language', e.target.value);
   };
