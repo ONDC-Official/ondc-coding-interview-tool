@@ -23,12 +23,13 @@ RUN npm run build
 
 # ---------- Stage 3: lean production runtime ----------
 FROM node:20-alpine AS runtime
+# NOTE: no ADMIN_PASSWORD here on purpose — it is a secret and must NOT be baked
+# into the (public) image. Supply it at runtime via env / docker-compose .env /
+# CI secret. The server refuses to boot in production without it (see config.ts).
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=1234 \
     MAX_USERS_PER_ROOM=2 \
-    ADMIN_USERNAME=admin \
-    ADMIN_PASSWORD=ONDC@0001 \
     CLIENT_DIST=/app/client/dist
 WORKDIR /app/server
 

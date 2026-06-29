@@ -7,13 +7,17 @@ services:
     restart: unless-stopped
     ports:
       - "1234:1234"
+    # Admin credentials come from a .env file sitting next to this compose file
+    # on the host (Compose auto-loads it). CI writes that .env from repo secrets;
+    # it is NOT committed. ADMIN_PASSWORD is mandatory — compose errors out if
+    # it is missing rather than starting with a blank/insecure password.
     environment:
       NODE_ENV: production
       HOST: "0.0.0.0"
       PORT: "1234"
       MAX_USERS_PER_ROOM: "2"
-      ADMIN_USERNAME: "admin"
-      ADMIN_PASSWORD: "ONDC@0001"
+      ADMIN_USERNAME: "${ADMIN_USERNAME:-admin}"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?ADMIN_PASSWORD must be set in the host .env}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1234/healthz"]
       interval: 30s

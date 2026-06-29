@@ -53,6 +53,22 @@ jobs:
           scp -i ~/.ssh/deploy_key.pem docker-compose.yml \
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${DEPLOY_DIR}/docker-compose.yml"
 
+      - name: Write runtime secrets to EC2 (.env)
+        if: env.HAS_SSH_KEY == 'true'
+        # Secrets are injected as env vars (masked in logs), then expanded into a
+        # 0600 .env next to the compose file. ADMIN_PASSWORD is mandatory — if the
+        # repo secret is unset, .env gets a blank value and `docker compose up`
+        # below fails fast on the compose `:?` guard instead of booting insecurely.
+        env:
+          ADMIN_USERNAME: ${{ secrets.ADMIN_USERNAME }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          ssh -i ~/.ssh/deploy_key.pem "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "umask 077 && cat > ${DEPLOY_DIR}/.env" <<EOF
+          ADMIN_USERNAME=${ADMIN_USERNAME:-admin}
+          ADMIN_PASSWORD=${ADMIN_PASSWORD}
+          EOF
+
       - name: Ship image & restart container
         if: env.HAS_SSH_KEY == 'true'
         run: |
