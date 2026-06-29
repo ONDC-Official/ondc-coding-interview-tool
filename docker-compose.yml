@@ -1,0 +1,20 @@
+# Runs the prebuilt image on the EC2. The CI workflow streams the image to the
+# host (docker load), copies this file, then runs `docker compose up -d`.
+services:
+  app:
+    image: ondc-coding-interview:latest
+    container_name: ondc-coding-interview
+    restart: unless-stopped
+    ports:
+      - "1234:1234"
+    environment:
+      NODE_ENV: production
+      HOST: "0.0.0.0"
+      PORT: "1234"
+      MAX_USERS_PER_ROOM: "2"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:1234/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

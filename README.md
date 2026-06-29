@@ -38,9 +38,10 @@ conflict-free, with each other's cursor and selection visible.
 │   └── src/           #   Landing, Session, editor, brand
 ├── server/            # Express + TS backend
 │   └── src/           #   index, app, config, logger, ws/, routes/
-├── deploy/            # pm2 ecosystem config used on the EC2
-├── .github/workflows/ # CI/CD: deploy.yml
-└── package.json       # root orchestrator scripts (uses workspaces' two projects)
+├── Dockerfile         # multi-stage build (client + server -> one image)
+├── docker-compose.yml # run the image (locally or on the EC2)
+├── .github/workflows/ # CI/CD: deploy.yml (build image -> ship to EC2)
+└── package.json       # root orchestrator scripts driving both projects
 ```
 
 The frontend and backend are independent npm projects (own `package.json` /
@@ -102,27 +103,18 @@ Frontend (`client/`) env vars (Vite):
 
 Health check: `GET /healthz` returns `{ status, uptimeSeconds, rooms, connections }`.
 
-## Deployment (GitHub Actions → EC2)
+## Docker
 
-On push to `main`, `.github/workflows/deploy.yml` builds both projects, ships the
-artifact to the workbench EC2, installs production deps, and (re)starts the app
-with **pm2** (`deploy/ecosystem.config.cjs`). The app is served directly on port
-`1234`.
+The whole app builds into a single image (multi-stage `Dockerfile`): the client
+is built with Vite, the server with `tsc`, and the runtime stage serves both on
+port `1234`.
 
-Required repo secrets (Settings → Secrets and variables → Actions):
+Run it locally:
 
-| Secret        | Value                              |
-| ------------- | ---------------------------------- |
-| `EC2_HOST`    | `13.233.69.163`                    |
-| `EC2_USER`    | `ubuntu`                           |
-| `EC2_SSH_KEY` | contents of the `.pem` private key |
-
-`EC2_HOST` and `EC2_USER` are already set via CLI. **Add `EC2_SSH_KEY` manually**
-(paste the full PEM), then re-run the workflow. Until it's set, CI builds but
-skips the deploy step.
-
-EC2 prerequisites: Node 18+ and pm2 installed; security-group **inbound TCP
-`1234`** open. After deploy, the app is at **http://13.233.69.163:1234**.
+```bash
+docker compose up --build
+# open http://localhost:1234
+```
 
 ## How it works
 
