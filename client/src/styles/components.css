@@ -1,0 +1,283 @@
+/* Cross-feature widgets: buttons, inputs, brand, theme toggle, spinner,
+ * badges, avatars, presence, panels, and the centered hero screen. */
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 0 16px;
+  height: 40px;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.btn-primary:hover {
+  filter: brightness(1.08);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border-color: var(--border-2);
+}
+.btn-ghost:hover {
+  background: var(--panel);
+  border-color: var(--border-2);
+}
+
+.btn-danger {
+  background: var(--red-soft);
+  color: var(--red);
+  border-color: transparent;
+}
+.btn-danger:hover {
+  background: var(--red);
+  color: #fff;
+}
+
+/* Compact button for table row actions. */
+.btn-sm {
+  height: 28px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.btn-block {
+  width: 100%;
+  height: 44px;
+  font-size: 14px;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* ---------- Inputs ---------- */
+.text-input {
+  width: 100%;
+  height: 42px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 1px solid var(--border-2);
+  background: var(--panel-2);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  font-weight: 500;
+  outline: none;
+}
+.text-input::placeholder {
+  color: var(--faint);
+}
+.text-input:focus {
+  border-color: var(--accent);
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.form-error {
+  color: var(--red);
+  font-size: 13px;
+  margin: 14px 0 0;
+}
+
+/* Shared focus ring. */
+.btn:focus-visible,
+.text-input:focus-visible,
+.theme-toggle:focus-visible,
+.lang-select select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+/* ---------- Brand ---------- */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+}
+.brand-stacked {
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Transparent ONDC logo — no background chip. `height` is set per instance. */
+.brand-logo {
+  display: block;
+  width: auto;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.brand-stacked .brand-text {
+  align-items: center;
+}
+
+.brand-name {
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.brand-stacked .brand-name {
+  font-size: 18px;
+}
+
+.brand-sub {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- Theme toggle ---------- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-2);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.theme-toggle:hover {
+  background: var(--panel);
+  color: var(--text);
+}
+.theme-toggle.floating {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 10;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+/* ---------- Spinner ---------- */
+.spinner {
+  width: var(--spinner-size, 42px);
+  height: var(--spinner-size, 42px);
+  border-radius: 50%;
+  border: 3px solid var(--border-2);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+/* ---------- Badge / avatar ---------- */
+.badge {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  padding: 4px 7px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+}
+
+.avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+/* ---------- Presence ---------- */
+.presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+.presence .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--red);
+}
+.presence.ok {
+  color: var(--green);
+}
+.presence.ok .dot {
+  background: var(--green);
+}
+
+/* ---------- Surfaces ---------- */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+/* Full-height screen + centered hero with the accent radial wash. */
+.screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.screen-center {
+  position: relative;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  gap: 24px;
+  background: radial-gradient(
+    120% 90% at 50% -10%,
+    var(--accent-soft),
+    transparent 60%
+  );
+}

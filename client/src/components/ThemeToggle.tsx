@@ -1,10 +1,10 @@
-import type { Theme } from './theme';
+import type { Theme } from '../lib/theme';
 
 interface Props {
   theme: Theme;
   onToggle: () => void;
   // `floating` pins the button to the top-right of the viewport for screens
-  // that have no topbar (landing / login / error states).
+  // that have no topbar (login / join / error states).
   floating?: boolean;
 }
 

@@ -1,0 +1,289 @@
+/* Session screen: editor top bar, Monaco surface, status bar, join gate. */
+
+.session-root {
+  position: relative;
+  height: 100%;
+}
+
+/* The join gate / connecting / full / not-found card sits above the (mounted)
+   editor on a solid background until the room is ready. */
+.session-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  overflow: auto;
+  background: var(--bg);
+}
+
+.session {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Editor top bar ---------- */
+.editor-bar {
+  flex: 0 0 auto;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.editor-bar-spacer {
+  flex: 1 1 auto;
+}
+
+.room-tag {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.room-tag .accent {
+  color: var(--accent);
+}
+
+.bar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+/* Styled native <select> for language. */
+.lang-select {
+  display: inline-flex;
+  align-items: center;
+}
+.lang-select select {
+  height: 30px;
+  padding: 0 28px 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border-2);
+  background: var(--bg)
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%238a96a8' stroke-width='1.5'/></svg>")
+    no-repeat right 10px center;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Presence: overlapping avatar dots + connected count. Hovering (or focusing)
+   the pill reveals the names of everyone connected. */
+.presence-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  cursor: default;
+  outline: none;
+}
+.presence-dots {
+  display: inline-flex;
+}
+.presence-dots span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1px solid var(--panel-2);
+}
+.presence-dots span + span {
+  margin-left: -3px;
+}
+
+.presence-popover {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  min-width: 168px;
+  padding: 8px;
+  border-radius: 9px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: none;
+}
+.presence-pill:hover .presence-popover,
+.presence-pill:focus-visible .presence-popover {
+  display: block;
+}
+.presence-popover-title {
+  padding: 2px 6px 8px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.presence-person {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+}
+.presence-person-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.presence-empty {
+  padding: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.btn-bar {
+  height: 30px;
+  padding: 0 13px;
+  border-radius: 7px;
+  font-size: 12px;
+}
+
+/* ---------- Editor surface ---------- */
+.editor-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+.editor-wrap .monaco-editor,
+.editor-wrap .monaco-editor .overflow-guard {
+  width: 100%;
+  height: 100%;
+}
+
+/* Remote peer's selection + caret. y-monaco assigns these class names but no
+   colors; a session is at most two people, so a single accent caret is shown. */
+.yRemoteSelection {
+  background-color: var(--accent-soft);
+  border-radius: 2px;
+}
+.yRemoteSelectionHead {
+  position: absolute;
+  box-sizing: border-box;
+  height: 100%;
+  border-left: 2px solid var(--accent);
+}
+
+/* ---------- Status bar ---------- */
+.statusbar {
+  flex: 0 0 auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 16px;
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 11px;
+  color: var(--muted);
+}
+.statusbar-spacer {
+  flex: 1 1 auto;
+}
+.statusbar .sb-synced {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--green);
+}
+.statusbar .sb-synced .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.statusbar .sb-syncing {
+  color: var(--amber);
+}
+
+/* ---------- Candidate join gate ---------- */
+.join-card {
+  width: 400px;
+  max-width: 100%;
+  padding: 30px;
+  text-align: center;
+}
+.join-icon {
+  width: 46px;
+  height: 46px;
+  margin: 0 auto 18px;
+  border-radius: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-weight: 700;
+  font-size: 22px;
+}
+.join-icon.amber {
+  background: var(--amber-soft);
+  color: var(--amber);
+}
+.join-icon.red {
+  background: var(--red-soft);
+  color: var(--red);
+}
+.join-title {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.join-sub {
+  margin: 10px 0 22px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.join-sub.tight {
+  margin-bottom: 0;
+}
+.join-form .field-label {
+  text-align: left;
+}
+.join-form .text-input {
+  margin-bottom: 18px;
+}
+.join-foot {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+  text-align: center;
+}

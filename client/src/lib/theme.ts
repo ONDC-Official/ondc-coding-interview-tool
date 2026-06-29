@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 // Light/dark theming. The active theme is reflected as a `data-theme`
-// attribute on <html>, which drives the CSS custom properties in styles.css.
+// attribute on <html>, which drives the CSS custom properties in styles/.
 // The choice is persisted to localStorage and falls back to the OS preference.
 
 export type Theme = 'light' | 'dark';

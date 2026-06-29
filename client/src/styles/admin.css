@@ -1,0 +1,155 @@
+/* Admin dashboard: app bar, header, stat strip, sessions table. */
+
+.appbar {
+  flex: 0 0 auto;
+  height: 58px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 24px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+}
+.appbar-spacer {
+  flex: 1 1 auto;
+}
+.appbar-user {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.admin-main {
+  flex: 1 1 auto;
+  overflow: auto;
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 24px;
+}
+
+.admin-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.admin-head h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.admin-head .tagline {
+  margin: 7px 0 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ---------- Stat strip ---------- */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
+}
+.stat-card {
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+.stat-value {
+  margin-top: 10px;
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 26px;
+  line-height: 1;
+  color: var(--text);
+}
+
+/* ---------- Sessions table ---------- */
+.sessions {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--panel);
+}
+
+/* Room · Status · Users · Duration · Actions (Language dropped). */
+.sessions-row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 0.7fr 0.9fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.sessions-head {
+  padding: 13px 18px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.sessions-head span {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sessions-row:last-child {
+  border-bottom: none;
+}
+
+.col-room {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--text);
+}
+.col-users {
+  font-family: var(--mono);
+  font-weight: 600;
+  font-size: 13px;
+}
+.col-dur {
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.status-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.row-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.admin-empty {
+  padding: 40px 18px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+}
