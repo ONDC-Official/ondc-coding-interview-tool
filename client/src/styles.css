@@ -388,6 +388,12 @@ body,
   font-size: 14px;
 }
 
+/* Drop CodeMirror's default dotted focus ring around the whole editor; the
+   caret already shows focus, and the ring reads as "off" vs a normal editor. */
+.editor-wrap .cm-editor.cm-focused {
+  outline: none;
+}
+
 .editor-wrap .cm-scroller {
   overflow: auto;
   font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
