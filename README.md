@@ -73,8 +73,9 @@ dev server on `:5173` together:
 npm run dev
 ```
 
-Then open **http://localhost:5173**, sign in at `/login` (`admin` /
-`ONDC@0001`), and click **Create new session** on the dashboard.
+Then open **http://localhost:5173**, sign in at `/login` (default dev login
+`admin` / `dev-only-password`, or whatever you set in `server/.env`), and click
+**Create new session** on the dashboard.
 
 To test collaboration, open the resulting `/s/...` link in a second browser
 window. Open it in a **third** window to see the "Session is full" rejection.
@@ -100,8 +101,11 @@ Backend (`server/`) env vars:
 - `MAX_USERS_PER_ROOM` — per-room cap (default `2`).
 - `CLIENT_DIST` — path to the built client (default `../client/dist`).
 - `NODE_ENV` — `production` enables combined logging.
-- `ADMIN_USERNAME` / `ADMIN_PASSWORD` — admin login that gates session creation
-  (defaults `admin` / `ONDC@0001`, also set in `server/.env`).
+- `ADMIN_USERNAME` / `ADMIN_PASSWORD` — admin login that gates session creation.
+  `ADMIN_USERNAME` defaults to `admin`. `ADMIN_PASSWORD` is a **secret**:
+  **required in production** (the server refuses to start without it) and must
+  never be committed — supply it via the host `.env` / CI secret. In dev it
+  falls back to `dev-only-password` if unset.
 - `ADMIN_TOKEN_TTL_MIN` — admin login token lifetime in minutes (default `720`).
 
 The server reads `server/.env` (via `dotenv`); copy `server/.env.example` to
@@ -139,9 +143,16 @@ port `1234`.
 Run it locally:
 
 ```bash
+# ADMIN_PASSWORD is required (no hardcoded default). Compose auto-loads a .env
+# sitting next to docker-compose.yml — it is gitignored, never commit it:
+printf 'ADMIN_USERNAME=admin\nADMIN_PASSWORD=<choose-a-strong-password>\n' > .env
 docker compose up --build
 # open http://localhost:1234
 ```
+
+In CI/CD the deploy workflow writes this `.env` on the EC2 host from the
+`ADMIN_USERNAME` / `ADMIN_PASSWORD` **GitHub Actions secrets**, so the password
+is never present in the repo, the image, or the compose file.
 
 ## Behind nginx (reverse proxy)
 

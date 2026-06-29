@@ -1,5 +1,29 @@
-import type { Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorState, type Extension } from '@codemirror/state';
+import {
+  EditorView,
+  keymap,
+  lineNumbers,
+  highlightActiveLineGutter,
+  highlightSpecialChars,
+  drawSelection,
+  dropCursor,
+  rectangularSelection,
+  crosshairCursor,
+  highlightActiveLine,
+} from '@codemirror/view';
+import {
+  foldGutter,
+  foldKeymap,
+  indentOnInput,
+  indentUnit,
+  bracketMatching,
+  syntaxHighlighting,
+  defaultHighlightStyle,
+} from '@codemirror/language';
+import { defaultKeymap } from '@codemirror/commands';
+import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
+import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
+import { lintKeymap } from '@codemirror/lint';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { python } from '@codemirror/lang-python';
 import { javascript } from '@codemirror/lang-javascript';
@@ -44,6 +68,54 @@ export function langExtension(value: string): Extension {
       return javascript();
   }
 }
+
+// CodeMirror's `basicSetup` minus autocompletion AND minus the native
+// `history()` / `historyKeymap`. We want syntax highlighting and auto-closing
+// brackets, but NO autocomplete popup.
+//
+// The native history is intentionally dropped: this editor is always
+// collaborative, and y-codemirror's sync plugin applies REMOTE edits as
+// ordinary local changes. CodeMirror's history would therefore put the other
+// peer's typing onto *your* undo stack, so Cmd-Z could revert their work and
+// local/remote edits would interleave unpredictably. Undo/redo is instead
+// driven by the Yjs UndoManager via `yUndoManagerKeymap` (wired up in
+// Session.tsx), which only tracks local edits — correct collaborative undo.
+//
+// `indentUnit` makes Tab and auto-indent use 4 spaces, matching CodeMirror's
+// default tab size, so indentation stays consistent across languages and with
+// any literal tabs in pasted code. `contentAttributes` turns off the browser's
+// own autocorrect / spellcheck / autocapitalize on the editable surface so
+// typing code stays untouched.
+export const editorSetup: Extension = [
+  lineNumbers(),
+  highlightActiveLineGutter(),
+  highlightSpecialChars(),
+  foldGutter(),
+  drawSelection(),
+  dropCursor(),
+  EditorState.allowMultipleSelections.of(true),
+  indentOnInput(),
+  indentUnit.of('    '),
+  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+  bracketMatching(),
+  closeBrackets(),
+  rectangularSelection(),
+  crosshairCursor(),
+  highlightActiveLine(),
+  highlightSelectionMatches(),
+  keymap.of([
+    ...closeBracketsKeymap,
+    ...defaultKeymap,
+    ...searchKeymap,
+    ...foldKeymap,
+    ...lintKeymap,
+  ]),
+  EditorView.contentAttributes.of({
+    autocorrect: 'off',
+    autocapitalize: 'off',
+    spellcheck: 'false',
+  }),
+];
 
 // Clean light editor theme. Syntax colors come from basicSetup's default
 // highlight style (tuned for light backgrounds); this just sets the surface,

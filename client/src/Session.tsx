@@ -6,15 +6,15 @@ import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from './theme';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { yCollab } from 'y-codemirror.next';
+import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
-import { basicSetup } from 'codemirror';
 import {
   LANGUAGES,
   DEFAULT_LANGUAGE,
   langExtension,
+  editorSetup,
   editorTheme,
   makeLocalUser,
   WS_URL,
@@ -46,6 +46,10 @@ export default function Session() {
 
   const [language, setLanguage] = useState<LanguageId>(DEFAULT_LANGUAGE);
   const [status, setStatus] = useState<ConnectionStatus>('connecting');
+  // True once the initial document state has been received from the server.
+  // Editing is blocked until then (see the build effect) so we never type into
+  // an un-synced doc and have the bulk sync later remap the cursor / merge text.
+  const [synced, setSynced] = useState(false);
   const [peers, setPeers] = useState(1);
   const [full, setFull] = useState(false);
   const [notFound, setNotFound] = useState(false);
@@ -64,15 +68,25 @@ export default function Session() {
     awareness.setLocalStateField('user', makeLocalUser());
 
     const languageConf = new Compartment();
+    // Gate editability on the initial sync. Starts read-only; flipped to
+    // editable once the provider reports it has synced (and back to read-only
+    // during any reconnect re-sync) so local edits can never race the incoming
+    // document state.
+    const editableConf = new Compartment();
 
     const state = EditorState.create({
       doc: '',
       extensions: [
-        basicSetup,
-        keymap.of([indentWithTab]),
+        editorSetup,
+        // Undo/redo is driven by the Yjs UndoManager (created internally by
+        // yCollab), not CodeMirror's native history — see editorSetup. This
+        // keymap routes Cmd-Z / Cmd-Shift-Z / Cmd-Y to it so undo only ever
+        // reverts THIS user's edits, never the remote peer's.
+        keymap.of([...yUndoManagerKeymap, indentWithTab]),
         themeConf.of(editorTheme(themeRef.current)),
         EditorView.lineWrapping,
         languageConf.of(langExtension(ymeta.get('language') || DEFAULT_LANGUAGE)),
+        editableConf.of(EditorView.editable.of(false)),
         yCollab(ytext, awareness),
       ],
     });
@@ -98,6 +112,19 @@ export default function Session() {
     const onStatus = (e: { status: ConnectionStatus }) => setStatus(e.status);
     provider.on('status', onStatus);
 
+    // Editing is enabled only while synced. This blocks input before the first
+    // sync (so we don't merge our text into the doc the server is about to
+    // send) and pauses it during a reconnect re-sync, then restores focus.
+    const onSync = (isSynced: boolean) => {
+      setSynced(isSynced);
+      view.dispatch({
+        effects: editableConf.reconfigure(EditorView.editable.of(isSynced)),
+      });
+      if (isSynced) view.focus();
+    };
+    provider.on('sync', onSync);
+    if (provider.synced) onSync(true);
+
     // The server closes with a custom code to reject a connection: ROOM_FULL_CODE
     // for a 3rd peer, ROOM_NOT_FOUND_CODE for a room no admin created. In both
     // cases stop auto-reconnect and show the matching screen.
@@ -116,6 +143,7 @@ export default function Session() {
       ymeta.unobserve(applyLanguage);
       awareness.off('change', updatePeers);
       provider.off('status', onStatus);
+      provider.off('sync', onSync);
       provider.off('connection-close', onClose);
       view.destroy();
       viewRef.current = null;
@@ -188,7 +216,14 @@ export default function Session() {
     );
   }
 
+  // Ready to edit only once connected AND the initial doc has synced.
   const connected = status === 'connected';
+  const ready = connected && synced;
+  const statusLabel = ready
+    ? `${peers}/2 connected`
+    : connected
+      ? 'syncing…'
+      : status;
 
   return (
     <div className="session">
@@ -208,9 +243,9 @@ export default function Session() {
         </div>
 
         <div className="topbar-right">
-          <span className={`presence ${connected ? 'ok' : 'bad'}`}>
+          <span className={`presence ${ready ? 'ok' : 'bad'}`}>
             <span className="dot" />
-            {connected ? `${peers}/2 connected` : status}
+            {statusLabel}
           </span>
           <button className="btn btn-ghost" onClick={copyLink}>
             {copied ? 'Copied!' : 'Copy link'}
