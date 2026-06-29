@@ -29,8 +29,8 @@ export function OndcMark({ size = 30 }: { size?: number }) {
         <line x1="16" y1="18" x2="6" y2="22" />
         <line x1="16" y1="18" x2="26" y2="22" />
       </g>
-      {/* nodes */}
-      <g fill="#0d1117" stroke="url(#ondc-g)" strokeWidth="1.8">
+      {/* nodes — fill matches the surface they sit on (see .brand-node) */}
+      <g className="brand-node" fill="#0d1117" stroke="url(#ondc-g)" strokeWidth="1.8">
         <circle cx="16" cy="6" r="3.4" />
         <circle cx="6" cy="22" r="3.4" />
         <circle cx="26" cy="22" r="3.4" />

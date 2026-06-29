@@ -2,10 +2,13 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Brand } from './Brand';
+import { ThemeToggle } from './ThemeToggle';
+import { useTheme } from './theme';
 import { login } from './api';
 
 export default function Login() {
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -28,6 +31,7 @@ export default function Login() {
 
   return (
     <div className="landing">
+      <ThemeToggle theme={theme} onToggle={toggle} floating />
       <div className="landing-card">
         <div className="landing-brand">
           <Brand size={40} stacked />

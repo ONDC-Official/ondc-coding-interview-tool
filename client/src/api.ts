@@ -3,6 +3,11 @@
 
 const TOKEN_KEY = 'adminToken';
 
+// Vite base ("/" or e.g. "/live-coder/"). API calls are written relative to it
+// so they survive being served under a reverse-proxy sub-path. The proxy strips
+// the prefix, so the server still sees "/api/...".
+const BASE = import.meta.env.BASE_URL;
+
 export function getToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
 }
@@ -46,7 +51,7 @@ async function authFetch(path: string, init: RequestInit = {}): Promise<Response
 
 /** Exchange credentials for a token. Returns false on bad credentials. */
 export async function login(username: string, password: string): Promise<boolean> {
-  const res = await fetch('/api/login', {
+  const res = await fetch(`${BASE}api/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ username, password }),
@@ -59,20 +64,20 @@ export async function login(username: string, password: string): Promise<boolean
 }
 
 export async function createSession(): Promise<SessionRow> {
-  const res = await authFetch('/api/sessions', { method: 'POST' });
+  const res = await authFetch(`${BASE}api/sessions`, { method: 'POST' });
   if (!res.ok) throw new Error('Could not create session');
   return (await res.json()) as SessionRow;
 }
 
 export async function listSessions(): Promise<SessionRow[]> {
-  const res = await authFetch('/api/sessions');
+  const res = await authFetch(`${BASE}api/sessions`);
   if (!res.ok) throw new Error('Could not load sessions');
   const { sessions } = (await res.json()) as { sessions: SessionRow[] };
   return sessions;
 }
 
 export async function endSession(roomId: string): Promise<void> {
-  const res = await authFetch(`/api/sessions/${encodeURIComponent(roomId)}`, {
+  const res = await authFetch(`${BASE}api/sessions/${encodeURIComponent(roomId)}`, {
     method: 'DELETE',
   });
   if (!res.ok && res.status !== 404) throw new Error('Could not end session');

@@ -30,6 +30,9 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
+          # Served behind nginx under this sub-path (see nginx.conf.example).
+          build-args: |
+            VITE_BASE_PATH=/live-coder/
           tags: ${{ env.IMAGE }}
           load: true
           cache-from: type=gha

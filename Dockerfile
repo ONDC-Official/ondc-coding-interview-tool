@@ -3,6 +3,11 @@
 # ---------- Stage 1: build the React/Vite client ----------
 FROM node:20-alpine AS client-build
 WORKDIR /app/client
+# Sub-path the app is served under behind the reverse proxy (nginx). Must start
+# and end with "/". Override at build time: --build-arg VITE_BASE_PATH=/ for a
+# root deployment.
+ARG VITE_BASE_PATH=/live-coder/
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
 COPY client/package.json client/package-lock.json ./
 RUN npm ci
 COPY client/ ./

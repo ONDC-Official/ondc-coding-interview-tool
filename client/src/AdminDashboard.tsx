@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Brand } from './Brand';
+import { ThemeToggle } from './ThemeToggle';
+import { useTheme } from './theme';
 import {
   clearToken,
   createSession,
@@ -13,12 +15,18 @@ import {
 
 const POLL_MS = 5000;
 
+// Path to a session, honoring the deployment sub-path (Vite base, e.g.
+// "/live-coder/"). Used for both the in-app link and the shareable URL.
+function sessionPath(roomId: string): string {
+  return `${import.meta.env.BASE_URL}s/${roomId}`;
+}
 function sessionUrl(roomId: string): string {
-  return `${window.location.origin}/s/${roomId}`;
+  return `${window.location.origin}${sessionPath(roomId)}`;
 }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
+  const { theme, toggle } = useTheme();
   const [sessions, setSessions] = useState<SessionRow[]>([]);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
@@ -103,6 +111,7 @@ export default function AdminDashboard() {
           <button className="btn btn-ghost" onClick={bounceToLogin}>
             Log out
           </button>
+          <ThemeToggle theme={theme} onToggle={toggle} />
         </div>
       </header>
 
@@ -135,7 +144,7 @@ export default function AdminDashboard() {
                     <button className="btn btn-ghost" onClick={() => onCopy(s.roomId)}>
                       {copied === s.roomId ? 'Copied!' : 'Copy link'}
                     </button>
-                    <a className="btn btn-ghost" href={`/s/${s.roomId}`} target="_blank" rel="noreferrer">
+                    <a className="btn btn-ghost" href={sessionPath(s.roomId)} target="_blank" rel="noreferrer">
                       Open
                     </a>
                     <button className="btn btn-danger" onClick={() => onEnd(s.roomId)}>

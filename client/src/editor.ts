@@ -1,8 +1,12 @@
 import type { Extension } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+import { oneDark } from '@codemirror/theme-one-dark';
 import { python } from '@codemirror/lang-python';
 import { javascript } from '@codemirror/lang-javascript';
 import { java } from '@codemirror/lang-java';
 import { cpp } from '@codemirror/lang-cpp';
+
+import type { Theme } from './theme';
 
 export type LanguageId = 'python' | 'javascript' | 'java' | 'cpp' | 'text';
 
@@ -41,6 +45,42 @@ export function langExtension(value: string): Extension {
   }
 }
 
+// Clean light editor theme. Syntax colors come from basicSetup's default
+// highlight style (tuned for light backgrounds); this just sets the surface,
+// gutter, caret and selection tones so they match the app's light palette.
+const lightEditorTheme = EditorView.theme(
+  {
+    '&': { backgroundColor: '#ffffff', color: '#1f2328' },
+    '.cm-content': { caretColor: '#1565a3' },
+    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#1565a3' },
+    '.cm-gutters': {
+      backgroundColor: '#ffffff',
+      color: '#8c959f',
+      border: 'none',
+      borderRight: '1px solid #e7ebef',
+    },
+    '.cm-activeLine': { backgroundColor: '#f6f8fa' },
+    '.cm-activeLineGutter': { backgroundColor: '#f0f3f6', color: '#59636e' },
+    '.cm-selectionBackground, .cm-content ::selection': {
+      backgroundColor: '#dbe7f6',
+    },
+    '&.cm-focused .cm-selectionBackground': { backgroundColor: '#cfe0f4' },
+    '.cm-foldPlaceholder': {
+      backgroundColor: '#eef1f4',
+      border: '1px solid #d8dee4',
+      color: '#59636e',
+    },
+  },
+  { dark: false }
+);
+
+// Editor theme extension for the active app theme. Dark uses One Dark; light
+// uses the surface theme above. Swapped at runtime via a CodeMirror compartment
+// so toggling the theme never tears down the editor or its collab connection.
+export function editorTheme(theme: Theme): Extension {
+  return theme === 'dark' ? oneDark : lightEditorTheme;
+}
+
 // WebSocket backend URL.
 //  - VITE_WS_URL (optional) is an explicit override.
 //  - In dev the backend runs on its own port (default 1234). We derive the host
@@ -48,11 +88,15 @@ export function langExtension(value: string): Extension {
 //    (e.g. http://13.233.69.163:5173 -> ws://13.233.69.163:1234).
 //  - In a production build the single server serves both, so use same origin.
 const WS_PORT = import.meta.env.VITE_WS_PORT || '1234';
+// In prod the WS shares the page origin AND its sub-path (the reverse proxy
+// strips the prefix before forwarding). WebsocketProvider appends "/<roomId>",
+// so include the base path here (without its trailing slash).
+const BASE_NO_SLASH = import.meta.env.BASE_URL.replace(/\/$/, '');
 export const WS_URL: string =
   import.meta.env.VITE_WS_URL ||
   (import.meta.env.DEV
     ? `ws://${location.hostname}:${WS_PORT}`
-    : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
+    : `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}${BASE_NO_SLASH}`);
 
 export interface LocalUser {
   name: string;

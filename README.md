@@ -145,21 +145,31 @@ docker compose up --build
 
 ## Behind nginx (reverse proxy)
 
-No app code changes are needed: the client uses a **same-origin** WebSocket
-(`wss://<your-domain>/<roomId>`) and auth is header-based (no cookies), so it
-works through a TLS-terminating proxy. The app sets `trust proxy` so
-`X-Forwarded-*` are honored.
+The app is served under a **sub-path** (default `/live-coder/`) so it can live
+alongside other apps on one domain. See `nginx.conf.example`.
 
-- Use `nginx.conf.example` (root). It terminates TLS and **must forward the
-  WebSocket upgrade** (the `Upgrade`/`Connection` headers + the `map` block) and
-  use long `proxy_read_timeout`/`proxy_send_timeout` for the long-lived sync
-  socket.
-- **Lock down port `1234`** so traffic only flows through nginx:
-  - nginx on the **same host** → bind the published port to localhost
-    (`"127.0.0.1:1234:1234"` in `docker-compose.yml`).
-  - nginx on a **separate host** → keep `1234` published but restrict it in the
-    app host's security group/firewall to nginx's IP only, and set
-    `proxy_pass` to the app's private IP.
+The client must be **built for that sub-path** — the build bakes it into asset,
+API, and WebSocket URLs via Vite's `base`:
+
+- Controlled by the `VITE_BASE_PATH` build arg / env (must start and end with
+  `/`). The `Dockerfile` and CI default it to `/live-coder/`; pass
+  `--build-arg VITE_BASE_PATH=/` for a plain root deployment.
+- `auth`/session API calls and the Yjs WebSocket are written relative to this
+  base; the proxy strips the prefix, so the **server always serves at root**
+  (no server-side change for the sub-path).
+
+nginx needs two things (both in `nginx.conf.example`):
+
+1. A `map $http_upgrade $connection_upgrade { ... }` at the `http{}` level so the
+   collaborative-sync **WebSocket upgrade** is forwarded.
+2. A `location /live-coder/ { proxy_pass http://<app>:1234/; ... }` (trailing
+   slash strips the prefix) with the `Upgrade`/`Connection` headers and long
+   `proxy_read_timeout`/`proxy_send_timeout` for the long-lived socket.
+
+The app sets `trust proxy` so `X-Forwarded-*` (real client IP, protocol) are
+honored. To keep `1234` off the public internet, restrict it to the nginx
+host/network (firewall/security group), or bind it to localhost
+(`"127.0.0.1:1234:1234"`) when nginx runs on the same host.
 
 ## How it works
 

@@ -1,15 +1,55 @@
-:root {
+/* ------------------------------------------------------------------ *
+ * Theme tokens. The active palette is selected by the data-theme
+ * attribute on <html> (set in theme.ts). Dark is the default so the
+ * app still renders correctly if the attribute is ever missing.
+ * ------------------------------------------------------------------ */
+:root,
+:root[data-theme='dark'] {
   --bg: #0d1117;
   --bg-elev: #161b22;
+  --surface-hover: #21262d;
   --border: #30363d;
+  --border-strong: #3d444d;
   --text: #e6edf3;
   --text-dim: #8b949e;
+  --field-bg: #0d1117;
+  --mono: #38c8da;
+  --shadow: 0 16px 48px rgba(1, 4, 9, 0.55);
+  --focus-ring: rgba(43, 138, 216, 0.45);
+
   /* ONDC brand */
   --accent: #1c75bc;
   --accent-hover: #2a8ad8;
+  --accent-contrast: #ffffff;
   --ondc-cyan: #00b3c7;
   --ok: #3fb950;
   --bad: #f85149;
+
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #f6f8fa;
+  --bg-elev: #ffffff;
+  --surface-hover: #eef1f4;
+  --border: #d8dee4;
+  --border-strong: #c2cad2;
+  --text: #1f2328;
+  --text-dim: #59636e;
+  --field-bg: #ffffff;
+  --mono: #0f7c8c;
+  --shadow: 0 12px 32px rgba(31, 35, 40, 0.1);
+  --focus-ring: rgba(21, 101, 163, 0.3);
+
+  /* ONDC brand */
+  --accent: #1565a3;
+  --accent-hover: #0d4f82;
+  --accent-contrast: #ffffff;
+  --ondc-cyan: #0098aa;
+  --ok: #1a7f37;
+  --bad: #cf222e;
+
+  color-scheme: light;
 }
 
 * {
@@ -31,8 +71,30 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Smooth, contained cross-fade between themes (surfaces/text/borders only). */
+body,
+.topbar,
+.landing-card,
+.btn,
+.text-input,
+.theme-toggle,
+.lang-select select,
+.admin-title,
+.session-table th,
+.session-table td {
+  transition: background-color 0.2s ease, border-color 0.2s ease,
+    color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* The brand mark's node centers punch through to whatever surface they sit on
+ * (topbar / card), so they read as cut-outs in either theme. */
+.brand-node {
+  fill: var(--bg-elev);
+}
+
 /* ---------- Landing / full screens ---------- */
 .landing {
+  position: relative;
   height: 100%;
   display: flex;
   align-items: center;
@@ -48,7 +110,7 @@ body {
   max-width: 460px;
   width: 100%;
   text-align: center;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow);
 }
 
 /* ---------- ONDC brand lockup ---------- */
@@ -128,20 +190,30 @@ body {
 
 /* ---------- Buttons ---------- */
 .btn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid transparent;
   border-radius: 8px;
-  padding: 10px 18px;
+  padding: 9px 16px;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn:focus-visible,
+.text-input:focus-visible,
+.theme-toggle:focus-visible,
+.lang-select select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .btn-primary {
   background: var(--accent);
-  color: #fff;
+  color: var(--accent-contrast);
 }
 
 .btn-primary:hover {
@@ -155,7 +227,8 @@ body {
 }
 
 .btn-ghost:hover {
-  background: #21262d;
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
 }
 
 .btn-danger {
@@ -174,6 +247,36 @@ body {
   cursor: default;
 }
 
+/* ---------- Theme toggle ---------- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+
+.theme-toggle.floating {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 10;
+  background: var(--bg-elev);
+  box-shadow: var(--shadow);
+}
+
 /* ---------- Login form ---------- */
 .login-form {
   display: flex;
@@ -183,12 +286,16 @@ body {
 }
 
 .text-input {
-  background: var(--bg);
+  background: var(--field-bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 10px 12px;
   font-size: 14px;
+}
+
+.text-input::placeholder {
+  color: var(--text-dim);
 }
 
 .text-input:focus {
@@ -211,11 +318,11 @@ body {
 
 .topbar {
   flex: 0 0 auto;
-  height: 48px;
+  height: 52px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 14px;
+  padding: 0 16px;
   background: var(--bg-elev);
   border-bottom: 1px solid var(--border);
 }
@@ -239,7 +346,7 @@ body {
 }
 
 .lang-select select {
-  background: var(--bg);
+  background: var(--field-bg);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -333,9 +440,13 @@ body {
   vertical-align: middle;
 }
 
+.session-table tbody tr:hover td {
+  background: var(--surface-hover);
+}
+
 .session-table .mono {
   font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
-  color: var(--ondc-cyan);
+  color: var(--mono);
 }
 
 .row-actions {
