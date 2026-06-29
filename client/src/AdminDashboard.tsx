@@ -101,7 +101,7 @@ export default function AdminDashboard() {
     <div className="admin">
       <header className="topbar">
         <div className="topbar-left">
-          <Brand size={26} />
+          <Brand size={30} />
           <span className="admin-title">Admin</span>
         </div>
         <div className="topbar-right">

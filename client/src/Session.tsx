@@ -6,16 +6,14 @@ import { ThemeToggle } from './ThemeToggle';
 import { useTheme } from './theme';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
-import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, keymap } from '@codemirror/view';
-import { indentWithTab } from '@codemirror/commands';
+import { MonacoBinding } from 'y-monaco';
+import * as monaco from 'monaco-editor';
 import {
   LANGUAGES,
   DEFAULT_LANGUAGE,
-  langExtension,
-  editorSetup,
-  editorTheme,
+  monacoLanguage,
+  monacoTheme,
+  EDITOR_OPTIONS,
   makeLocalUser,
   WS_URL,
   type LanguageId,
@@ -33,13 +31,7 @@ export default function Session() {
   const { theme, toggle } = useTheme();
   const editorParent = useRef<HTMLDivElement>(null);
   const ymetaRef = useRef<Y.Map<string> | null>(null);
-  const viewRef = useRef<EditorView | null>(null);
 
-  // A CodeMirror compartment lets us hot-swap the editor theme on toggle
-  // without rebuilding the editor (which would drop the collab connection).
-  const themeConfRef = useRef<Compartment | null>(null);
-  if (themeConfRef.current === null) themeConfRef.current = new Compartment();
-  const themeConf = themeConfRef.current;
   // Latest theme, read by the build effect (which is keyed on roomId only).
   const themeRef = useRef(theme);
   themeRef.current = theme;
@@ -59,6 +51,8 @@ export default function Session() {
     if (!roomId || !editorParent.current) return;
 
     const ydoc = new Y.Doc();
+    // Yjs text key kept as 'codemirror' (the prior editor's key) so rooms whose
+    // contents the server already persisted under it survive this editor swap.
     const ytext = ydoc.getText('codemirror');
     const ymeta = ydoc.getMap<string>('meta');
     ymetaRef.current = ymeta;
@@ -67,39 +61,49 @@ export default function Session() {
     const awareness = provider.awareness;
     awareness.setLocalStateField('user', makeLocalUser());
 
-    const languageConf = new Compartment();
-    // Gate editability on the initial sync. Starts read-only; flipped to
-    // editable once the provider reports it has synced (and back to read-only
-    // during any reconnect re-sync) so local edits can never race the incoming
-    // document state.
-    const editableConf = new Compartment();
+    // Build the Monaco editor. It starts read-only and is flipped to editable
+    // once the provider reports its first sync (see onSync), so local edits can
+    // never race the incoming document state.
+    const initialLang = (ymeta.get('language') as LanguageId) || DEFAULT_LANGUAGE;
+    const model = monaco.editor.createModel('', monacoLanguage(initialLang));
+    model.updateOptions({ tabSize: 4, insertSpaces: true });
 
-    const state = EditorState.create({
-      doc: '',
-      extensions: [
-        editorSetup,
-        // Undo/redo is driven by the Yjs UndoManager (created internally by
-        // yCollab), not CodeMirror's native history — see editorSetup. This
-        // keymap routes Cmd-Z / Cmd-Shift-Z / Cmd-Y to it so undo only ever
-        // reverts THIS user's edits, never the remote peer's.
-        keymap.of([...yUndoManagerKeymap, indentWithTab]),
-        themeConf.of(editorTheme(themeRef.current)),
-        EditorView.lineWrapping,
-        languageConf.of(langExtension(ymeta.get('language') || DEFAULT_LANGUAGE)),
-        editableConf.of(EditorView.editable.of(false)),
-        yCollab(ytext, awareness),
-      ],
+    const editor = monaco.editor.create(editorParent.current, {
+      ...EDITOR_OPTIONS,
+      model,
+      theme: monacoTheme(themeRef.current),
+      readOnly: true,
     });
 
-    const view = new EditorView({ state, parent: editorParent.current });
-    viewRef.current = view;
+    // Bind the Monaco model to the shared Yjs text + awareness. This drives both
+    // collaborative text sync AND rendering of the remote peer's cursor/selection.
+    const binding = new MonacoBinding(ytext, model, new Set([editor]), awareness);
+
+    // Undo/redo is driven by a Yjs UndoManager scoped to THIS binding's edits,
+    // not Monaco's native model history. The binding applies the remote peer's
+    // edits to the model as ordinary changes, so Monaco's own undo would let
+    // Cmd-Z revert their work; tracking only the binding's origin keeps undo
+    // local. We rebind the undo/redo chords to route through it.
+    const undoManager = new Y.UndoManager(ytext, {
+      trackedOrigins: new Set([binding]),
+    });
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () =>
+      undoManager.undo()
+    );
+    editor.addCommand(
+      monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyZ,
+      () => undoManager.redo()
+    );
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyY, () =>
+      undoManager.redo()
+    );
 
     // Language lives in the shared doc, so a change by either peer (or the
     // already-synced state seen by a late joiner) updates both editors.
     const applyLanguage = () => {
       const lang = (ymeta.get('language') as LanguageId) || DEFAULT_LANGUAGE;
       setLanguage(lang);
-      view.dispatch({ effects: languageConf.reconfigure(langExtension(lang)) });
+      monaco.editor.setModelLanguage(model, monacoLanguage(lang));
     };
     ymeta.observe(applyLanguage);
     applyLanguage();
@@ -117,10 +121,8 @@ export default function Session() {
     // send) and pauses it during a reconnect re-sync, then restores focus.
     const onSync = (isSynced: boolean) => {
       setSynced(isSynced);
-      view.dispatch({
-        effects: editableConf.reconfigure(EditorView.editable.of(isSynced)),
-      });
-      if (isSynced) view.focus();
+      editor.updateOptions({ readOnly: !isSynced });
+      if (isSynced) editor.focus();
     };
     provider.on('sync', onSync);
     if (provider.synced) onSync(true);
@@ -145,19 +147,20 @@ export default function Session() {
       provider.off('status', onStatus);
       provider.off('sync', onSync);
       provider.off('connection-close', onClose);
-      view.destroy();
-      viewRef.current = null;
+      undoManager.destroy();
+      binding.destroy();
+      editor.dispose();
+      model.dispose();
       provider.destroy();
       ydoc.destroy();
     };
-  }, [roomId, themeConf]);
+  }, [roomId]);
 
-  // Reconfigure just the theme compartment when the app theme toggles.
+  // Swap Monaco's theme when the app theme toggles. setTheme is global (one
+  // editor here) and never rebuilds the editor, so the collab connection holds.
   useEffect(() => {
-    viewRef.current?.dispatch({
-      effects: themeConf.reconfigure(editorTheme(theme)),
-    });
-  }, [theme, themeConf]);
+    monaco.editor.setTheme(monacoTheme(theme));
+  }, [theme]);
 
   const onLanguageChange = (e: ChangeEvent<HTMLSelectElement>) => {
     // Write to the shared doc; the observer above updates both editors.
@@ -186,7 +189,7 @@ export default function Session() {
         <ThemeToggle theme={theme} onToggle={toggle} floating />
         <div className="landing-card">
           <div className="landing-brand">
-            <Brand size={40} stacked />
+            <Brand size={56} stacked />
           </div>
           <h2 className="full-title">Session not found</h2>
           <p className="tagline">
@@ -204,7 +207,7 @@ export default function Session() {
         <ThemeToggle theme={theme} onToggle={toggle} floating />
         <div className="landing-card">
           <div className="landing-brand">
-            <Brand size={40} stacked />
+            <Brand size={56} stacked />
           </div>
           <h2 className="full-title">Session is full</h2>
           <p className="tagline">
@@ -229,7 +232,7 @@ export default function Session() {
     <div className="session">
       <header className="topbar">
         <div className="topbar-left">
-          <Brand size={26} />
+          <Brand size={30} />
           <label className="lang-select">
             <span className="lang-label">Language</span>
             <select value={language} onChange={onLanguageChange}>

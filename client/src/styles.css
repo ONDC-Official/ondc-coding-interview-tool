@@ -86,12 +86,6 @@ body,
     color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* The brand mark's node centers punch through to whatever surface they sit on
- * (topbar / card), so they read as cut-outs in either theme. */
-.brand-node {
-  fill: var(--bg-elev);
-}
-
 /* ---------- Landing / full screens ---------- */
 .landing {
   position: relative;
@@ -117,7 +111,7 @@ body,
 .brand-lockup {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
 }
 
 .brand-lockup.stacked {
@@ -125,33 +119,16 @@ body,
   gap: 12px;
 }
 
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-  text-align: left;
-}
-
-.brand-lockup.stacked .brand-text {
-  align-items: center;
-  text-align: center;
-}
-
-.brand-wordmark {
-  font-weight: 800;
-  letter-spacing: 1px;
-  background: linear-gradient(90deg, var(--accent), var(--ondc-cyan));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.brand-lockup .brand-wordmark {
-  font-size: 18px;
-}
-
-.brand-lockup.stacked .brand-wordmark {
-  font-size: 30px;
+/* The official ONDC logo carries dark tagline / ® text, so it sits on a light
+   chip to stay legible on the dark theme too (dark is the default palette).
+   `height` is set per instance via the img attribute; width scales to match. */
+.brand-logo {
+  display: block;
+  width: auto;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 9px;
+  box-shadow: 0 1px 2px rgba(1, 4, 9, 0.18);
 }
 
 .brand-sub {
@@ -381,22 +358,29 @@ body,
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
+  position: relative;
 }
 
-.editor-wrap .cm-editor {
+/* Monaco fills the wrapper; automaticLayout tracks the container's size. */
+.editor-wrap .monaco-editor,
+.editor-wrap .monaco-editor .overflow-guard {
+  width: 100%;
   height: 100%;
-  font-size: 14px;
 }
 
-/* Drop CodeMirror's default dotted focus ring around the whole editor; the
-   caret already shows focus, and the ring reads as "off" vs a normal editor. */
-.editor-wrap .cm-editor.cm-focused {
-  outline: none;
+/* Remote peer's selection + caret. y-monaco assigns these class names but no
+   colors, so we supply one accent — a session is at most two people, so there
+   is only ever a single remote caret to show. */
+.yRemoteSelection {
+  background-color: rgba(0, 179, 199, 0.35);
+  border-radius: 2px;
 }
 
-.editor-wrap .cm-scroller {
-  overflow: auto;
-  font-family: 'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace;
+.yRemoteSelectionHead {
+  position: absolute;
+  box-sizing: border-box;
+  height: 100%;
+  border-left: 2px solid #00b3c7;
 }
 
 /* ---------- Admin dashboard ---------- */

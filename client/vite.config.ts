@@ -18,6 +18,17 @@ const base = process.env.VITE_BASE_PATH || '/';
 export default defineConfig({
   base,
   plugins: [react()],
-  server: { port: 5173, host: true }, // host:true -> bind 0.0.0.0 so LAN/remote devices can connect
+  server: {
+    port: 5173,
+    host: true, // bind 0.0.0.0 so LAN/remote devices can connect
+    // Dev only: the backend runs on its own port (:1234), but the client's HTTP
+    // API calls are relative (so they work same-origin in prod). Proxy /api to
+    // the backend so login / session calls reach it from the :5173 dev origin.
+    // (The WS connects to :1234 directly — see src/editor.ts — so it needs no
+    // proxy here.)
+    proxy: {
+      '/api': { target: 'http://localhost:1234', changeOrigin: true },
+    },
+  },
   build: { outDir: 'dist' },
 });

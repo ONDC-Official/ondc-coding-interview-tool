@@ -34,7 +34,7 @@ export default function Login() {
       <ThemeToggle theme={theme} onToggle={toggle} floating />
       <div className="landing-card">
         <div className="landing-brand">
-          <Brand size={40} stacked />
+          <Brand size={56} stacked />
         </div>
         <p className="tagline">Admin sign in to create and monitor sessions.</p>
         <form className="login-form" onSubmit={onSubmit}>

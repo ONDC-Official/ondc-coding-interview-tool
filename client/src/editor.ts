@@ -1,34 +1,7 @@
-import { EditorState, type Extension } from '@codemirror/state';
-import {
-  EditorView,
-  keymap,
-  lineNumbers,
-  highlightActiveLineGutter,
-  highlightSpecialChars,
-  drawSelection,
-  dropCursor,
-  rectangularSelection,
-  crosshairCursor,
-  highlightActiveLine,
-} from '@codemirror/view';
-import {
-  foldGutter,
-  foldKeymap,
-  indentOnInput,
-  indentUnit,
-  bracketMatching,
-  syntaxHighlighting,
-  defaultHighlightStyle,
-} from '@codemirror/language';
-import { defaultKeymap } from '@codemirror/commands';
-import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
-import { lintKeymap } from '@codemirror/lint';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { python } from '@codemirror/lang-python';
-import { javascript } from '@codemirror/lang-javascript';
-import { java } from '@codemirror/lang-java';
-import { cpp } from '@codemirror/lang-cpp';
+import * as monaco from 'monaco-editor';
+// Side-effect import: registers the Monaco web workers before any editor is
+// created (see monaco-setup.ts).
+import './monaco-setup';
 
 import type { Theme } from './theme';
 
@@ -51,107 +24,60 @@ export const LANGUAGES: LanguageOption[] = [
 
 export const DEFAULT_LANGUAGE: LanguageId = 'python';
 
-// Returns the CodeMirror language extension for a stored language value.
-export function langExtension(value: string): Extension {
+// Maps a stored language value to Monaco's language id. Monaco calls plain text
+// "plaintext" and C++ "cpp"; the rest line up with our own ids.
+export function monacoLanguage(value: string): string {
   switch (value) {
     case 'python':
-      return python();
+      return 'python';
     case 'java':
-      return java();
+      return 'java';
     case 'cpp':
-      return cpp();
+      return 'cpp';
     case 'text':
-      // Plain text: no language extension, so no syntax highlighting.
-      return [];
+      return 'plaintext';
     case 'javascript':
     default:
-      return javascript();
+      return 'javascript';
   }
 }
 
-// CodeMirror's `basicSetup` minus autocompletion AND minus the native
-// `history()` / `historyKeymap`. We want syntax highlighting and auto-closing
-// brackets, but NO autocomplete popup.
-//
-// The native history is intentionally dropped: this editor is always
-// collaborative, and y-codemirror's sync plugin applies REMOTE edits as
-// ordinary local changes. CodeMirror's history would therefore put the other
-// peer's typing onto *your* undo stack, so Cmd-Z could revert their work and
-// local/remote edits would interleave unpredictably. Undo/redo is instead
-// driven by the Yjs UndoManager via `yUndoManagerKeymap` (wired up in
-// Session.tsx), which only tracks local edits — correct collaborative undo.
-//
-// `indentUnit` makes Tab and auto-indent use 4 spaces, matching CodeMirror's
-// default tab size, so indentation stays consistent across languages and with
-// any literal tabs in pasted code. `contentAttributes` turns off the browser's
-// own autocorrect / spellcheck / autocapitalize on the editable surface so
-// typing code stays untouched.
-export const editorSetup: Extension = [
-  lineNumbers(),
-  highlightActiveLineGutter(),
-  highlightSpecialChars(),
-  foldGutter(),
-  drawSelection(),
-  dropCursor(),
-  EditorState.allowMultipleSelections.of(true),
-  indentOnInput(),
-  indentUnit.of('    '),
-  syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-  bracketMatching(),
-  closeBrackets(),
-  rectangularSelection(),
-  crosshairCursor(),
-  highlightActiveLine(),
-  highlightSelectionMatches(),
-  keymap.of([
-    ...closeBracketsKeymap,
-    ...defaultKeymap,
-    ...searchKeymap,
-    ...foldKeymap,
-    ...lintKeymap,
-  ]),
-  EditorView.contentAttributes.of({
-    autocorrect: 'off',
-    autocapitalize: 'off',
-    spellcheck: 'false',
-  }),
-];
-
-// Clean light editor theme. Syntax colors come from basicSetup's default
-// highlight style (tuned for light backgrounds); this just sets the surface,
-// gutter, caret and selection tones so they match the app's light palette.
-const lightEditorTheme = EditorView.theme(
-  {
-    '&': { backgroundColor: '#ffffff', color: '#1f2328' },
-    '.cm-content': { caretColor: '#1565a3' },
-    '.cm-cursor, .cm-dropCursor': { borderLeftColor: '#1565a3' },
-    '.cm-gutters': {
-      backgroundColor: '#ffffff',
-      color: '#8c959f',
-      border: 'none',
-      borderRight: '1px solid #e7ebef',
-    },
-    '.cm-activeLine': { backgroundColor: '#f6f8fa' },
-    '.cm-activeLineGutter': { backgroundColor: '#f0f3f6', color: '#59636e' },
-    '.cm-selectionBackground, .cm-content ::selection': {
-      backgroundColor: '#dbe7f6',
-    },
-    '&.cm-focused .cm-selectionBackground': { backgroundColor: '#cfe0f4' },
-    '.cm-foldPlaceholder': {
-      backgroundColor: '#eef1f4',
-      border: '1px solid #d8dee4',
-      color: '#59636e',
-    },
-  },
-  { dark: false }
-);
-
-// Editor theme extension for the active app theme. Dark uses One Dark; light
-// uses the surface theme above. Swapped at runtime via a CodeMirror compartment
-// so toggling the theme never tears down the editor or its collab connection.
-export function editorTheme(theme: Theme): Extension {
-  return theme === 'dark' ? oneDark : lightEditorTheme;
+// Monaco's built-in light/dark themes, picked to match the app theme. Swapped at
+// runtime with monaco.editor.setTheme (global), so toggling never tears the
+// editor down or drops the collab connection.
+export function monacoTheme(theme: Theme): string {
+  return theme === 'dark' ? 'vs-dark' : 'vs';
 }
+
+// Editor options shared by every session. Autocomplete / suggestion popups are
+// deliberately disabled: this is a DSA interview surface, and the previous
+// editor intentionally shipped without them, so we keep that behaviour. Tab and
+// auto-indent use 4 spaces (set on the model too); word wrap is on; the minimap
+// is hidden for a cleaner, distraction-free surface.
+export const EDITOR_OPTIONS: monaco.editor.IStandaloneEditorConstructionOptions = {
+  fontSize: 14,
+  fontFamily: "'SF Mono', 'JetBrains Mono', Menlo, Consolas, monospace",
+  fontLigatures: false,
+  wordWrap: 'on',
+  minimap: { enabled: false },
+  scrollBeyondLastLine: false,
+  smoothScrolling: true,
+  automaticLayout: true,
+  tabSize: 4,
+  insertSpaces: true,
+  detectIndentation: false,
+  renderWhitespace: 'selection',
+  padding: { top: 12, bottom: 12 },
+  scrollbar: { useShadows: false },
+  // No autocomplete: the interview editor is intentionally suggestion-free.
+  quickSuggestions: false,
+  suggestOnTriggerCharacters: false,
+  wordBasedSuggestions: 'off',
+  parameterHints: { enabled: false },
+  tabCompletion: 'off',
+  // Browser autocorrect / spellcheck off so typing code stays untouched.
+  ariaLabel: 'Code editor',
+};
 
 // WebSocket backend URL.
 //  - VITE_WS_URL (optional) is an explicit override.
