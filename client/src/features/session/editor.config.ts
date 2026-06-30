@@ -82,7 +82,7 @@ monaco.editor.defineTheme(LC_DARK, {
   base: 'vs-dark',
   inherit: true,
   rules: [
-    { token: 'comment', foreground: '5a6678', fontStyle: 'italic' },
+    { token: 'comment', foreground: '8c9bb0', fontStyle: 'italic' },
     { token: 'keyword', foreground: '79b8ff' },
     { token: 'keyword.control', foreground: '79b8ff' },
     { token: 'number', foreground: 'f2a73b' },
@@ -115,7 +115,7 @@ monaco.editor.defineTheme(LC_LIGHT, {
   base: 'vs',
   inherit: true,
   rules: [
-    { token: 'comment', foreground: '9aa3b2', fontStyle: 'italic' },
+    { token: 'comment', foreground: '5f6b7a', fontStyle: 'italic' },
     { token: 'keyword', foreground: '0550ae' },
     { token: 'keyword.control', foreground: '0550ae' },
     { token: 'number', foreground: 'b9740a' },
