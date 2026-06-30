@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket';
 import { MonacoBinding } from 'y-monaco';
@@ -18,6 +18,24 @@ const ROOM_FULL_CODE = 4001;
 // Server close code: room was never created by an admin, or has been ended.
 const ROOM_NOT_FOUND_CODE = 4004;
 
+// Periodically re-exchange the Yjs state vector with the server. y-websocket
+// only runs the sync protocol on (re)connect; without this, any drift between a
+// peer's document and the server's canonical doc never heals. 3s keeps the two
+// editors converging quickly without meaningful bandwidth cost on a tiny doc.
+const RESYNC_INTERVAL_MS = 3000;
+// Backstop that catches the one divergence the resync above CAN'T fix: when the
+// Monaco model drifts from its own local ytext (a y-monaco binding hiccup under
+// rapid concurrent edits), the CRDTs agree but the *rendered* text doesn't. We
+// poll for that and hard-relink the editor to the CRDT. Cheap (one string
+// compare on a small doc).
+const DIVERGENCE_POLL_MS = 1500;
+// Debounce the same check after edits settle, so a divergence heals within a
+// fraction of a second of the user pausing rather than waiting for the poll.
+const DIVERGENCE_DEBOUNCE_MS = 250;
+// Cursor read-out (Ln, Col) is cosmetic — throttle it so fast typing doesn't
+// re-render the status bar on every keystroke.
+const CURSOR_THROTTLE_MS = 100;
+
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected';
 
 export interface CursorPos {
@@ -35,6 +53,10 @@ export interface CollabSession {
   status: ConnectionStatus;
   synced: boolean;
   ready: boolean;
+  // Sticky: true once the session has synced at least once. Used to gate the
+  // big "connecting" overlay so a transient reconnect doesn't slam it shut over
+  // a session that's already up (the editor stays usable; edits queue locally).
+  everReady: boolean;
   peers: number;
   participants: Participant[];
   full: boolean;
@@ -85,6 +107,8 @@ export function useCollabSession({
   // Editing is blocked until then (see the build effect) so we never type into
   // an un-synced doc and have the bulk sync later remap the cursor / merge text.
   const [synced, setSynced] = useState(false);
+  // Sticky version of `synced`: latches true on the first sync and never drops.
+  const [everReady, setEverReady] = useState(false);
   const [peers, setPeers] = useState(1);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [full, setFull] = useState(false);
@@ -100,14 +124,19 @@ export function useCollabSession({
   useEffect(() => {
     if (!active || !roomId || !editorParent.current) return;
 
-    const ydoc = new Y.Doc();
+    // gc disabled so the client-side Y.UndoManager keeps its deleted-content
+    // history (mirrors the server's gc:false) and rapid delete/retype merges
+    // stay predictable.
+    const ydoc = new Y.Doc({ gc: false });
     // Yjs text key kept as 'codemirror' (the prior editor's key) so rooms whose
     // contents the server already persisted under it survive this editor swap.
     const ytext = ydoc.getText('codemirror');
     const ymeta = ydoc.getMap('meta');
     ymetaRef.current = ymeta;
 
-    const provider = new WebsocketProvider(WS_URL, roomId, ydoc);
+    const provider = new WebsocketProvider(WS_URL, roomId, ydoc, {
+      resyncInterval: RESYNC_INTERVAL_MS,
+    });
     const awareness = provider.awareness;
     awareness.setLocalStateField('user', makeLocalUser(nameRef.current));
 
@@ -117,6 +146,10 @@ export function useCollabSession({
     const initialLang = (ymeta.get('language') as LanguageId) || DEFAULT_LANGUAGE;
     const model = monaco.editor.createModel('', monacoLanguage(initialLang));
     model.updateOptions({ tabSize: 4, insertSpaces: true });
+    // Force LF line endings to match Yjs (which stores '\n'). Without this a
+    // CRLF model would compare unequal to ytext on every line and make the
+    // divergence detector below fire constantly.
+    model.setEOL(monaco.editor.EndOfLineSequence.LF);
 
     const editor = monaco.editor.create(editorParent.current, {
       ...EDITOR_OPTIONS,
@@ -127,15 +160,18 @@ export function useCollabSession({
 
     // Bind the Monaco model to the shared Yjs text + awareness. This drives both
     // collaborative text sync AND rendering of the remote peer's cursor/selection.
-    const binding = new MonacoBinding(ytext, model, new Set([editor]), awareness);
+    // `binding`/`undoManager` are reassignable: the divergence reconciler below
+    // tears them down and rebuilds a fresh pair to re-link the model to the CRDT.
+    let binding = new MonacoBinding(ytext, model, new Set([editor]), awareness);
 
-    // Undo/redo is driven by a Yjs UndoManager scoped to THIS binding's edits,
-    // not Monaco's native model history. The binding applies the remote peer's
-    // edits to the model as ordinary changes, so Monaco's own undo would let
-    // Cmd-Z revert their work; tracking only the binding's origin keeps undo
-    // local. We rebind the undo/redo chords to route through it.
-    const undoManager = new Y.UndoManager(ytext, {
-      trackedOrigins: new Set([binding]),
+    // Undo/redo is driven by a Yjs UndoManager scoped to the CURRENT binding's
+    // edits, not Monaco's native model history. The binding applies the remote
+    // peer's edits to the model as ordinary changes, so Monaco's own undo would
+    // let Cmd-Z revert their work; tracking only the binding's origin keeps undo
+    // local. The chord handlers below read `undoManager` lazily, so they keep
+    // working after a reconcile swaps it.
+    let undoManager = new Y.UndoManager(ytext, {
+      trackedOrigins: new Set<unknown>([binding]),
     });
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyZ, () =>
       undoManager.undo()
@@ -148,10 +184,61 @@ export function useCollabSession({
       undoManager.redo()
     );
 
-    // Status-bar cursor readout (Ln, Col).
-    const cursorSub = editor.onDidChangeCursorPosition((e) =>
-      setCursor({ line: e.position.lineNumber, column: e.position.column })
-    );
+    // --- Divergence reconciler -------------------------------------------------
+    // The CRDT (ytext) is authoritative. If the rendered Monaco model ever drifts
+    // from it (binding hiccup under rapid concurrent edits), the peers diverge
+    // permanently because each shows/sends its own model. We detect that and
+    // rebuild the binding so the model is re-linked to ytext. Rebuilding (rather
+    // than model.setValue under the live binding) avoids fighting y-monaco's
+    // internal mutex.
+    let disposed = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const rebuildBinding = () => {
+      const docText = ytext.toString();
+      if (model.getValue() === docText) return;
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[collab] editor drifted from the shared document — reconciling to CRDT'
+      );
+      const viewState = editor.saveViewState();
+      undoManager.destroy();
+      binding.destroy();
+      // Re-link a fresh binding; its constructor resets the model to ytext.
+      binding = new MonacoBinding(ytext, model, new Set([editor]), awareness);
+      undoManager = new Y.UndoManager(ytext, {
+        trackedOrigins: new Set<unknown>([binding]),
+      });
+      if (viewState) editor.restoreViewState(viewState);
+    };
+
+    const checkDivergence = () => {
+      if (disposed) return;
+      rebuildBinding();
+    };
+    const scheduleDivergenceCheck = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(checkDivergence, DIVERGENCE_DEBOUNCE_MS);
+    };
+    // After any change (local typing or a remote/ytext update) re-check once the
+    // dust settles; plus a periodic backstop for sustained continuous typing.
+    ytext.observe(scheduleDivergenceCheck);
+    const contentSub = model.onDidChangeContent(scheduleDivergenceCheck);
+    const divergencePoll = setInterval(checkDivergence, DIVERGENCE_POLL_MS);
+
+    // Status-bar cursor readout (Ln, Col), throttled so rapid cursor motion
+    // doesn't re-render the UI on every keystroke.
+    let pendingCursor: CursorPos | null = null;
+    let cursorTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushCursor = () => {
+      cursorTimer = null;
+      if (pendingCursor) setCursor(pendingCursor);
+    };
+    const cursorSub = editor.onDidChangeCursorPosition((e) => {
+      pendingCursor = { line: e.position.lineNumber, column: e.position.column };
+      if (cursorTimer) return;
+      cursorTimer = setTimeout(flushCursor, CURSOR_THROTTLE_MS);
+    });
 
     // Language lives in the shared doc, so a change by either peer (or the
     // already-synced state seen by a late joiner) updates both editors.
@@ -165,11 +252,25 @@ export function useCollabSession({
 
     // Presence: awareness states carry each peer's display name + cursor color
     // (incl. self). Drives both the connected count and the names popover.
+    // Awareness fires on every cursor move (i.e. every keystroke of the remote
+    // peer), so we gate React updates on an *identity* signature: only re-render
+    // when the set of peers / their names / colors actually changes, never for a
+    // bare cursor move.
+    let presenceSig = '';
     const updatePresence = () => {
-      const states = [...awareness.getStates().values()];
-      setPeers(states.length);
+      const entries = [...awareness.getStates().entries()];
+      const sig = entries
+        .map(([id, s]) => {
+          const user = (s as { user?: { name?: string; color?: string } }).user;
+          return `${id}:${user?.name ?? ''}:${user?.color ?? ''}`;
+        })
+        .sort()
+        .join('|');
+      if (sig === presenceSig) return;
+      presenceSig = sig;
+      setPeers(entries.length);
       setParticipants(
-        states.map((s) => {
+        entries.map(([, s]) => {
           const user = (s as { user?: { name?: string; color?: string } }).user;
           return {
             name: user?.name?.trim() || 'Guest',
@@ -184,13 +285,18 @@ export function useCollabSession({
     const onStatus = (e: { status: ConnectionStatus }) => setStatus(e.status);
     provider.on('status', onStatus);
 
-    // Editing is enabled only while synced. This blocks input before the first
-    // sync (so we don't merge our text into the doc the server is about to
-    // send) and pauses it during a reconnect re-sync, then restores focus.
+    // Editing is gated on the FIRST sync only. Before it we stay read-only so we
+    // don't merge local text into the empty doc the server is about to send.
+    // Once synced once, we keep the editor editable through later
+    // reconnect/resync cycles — Yjs queues offline edits and merges them on
+    // reconnect, so blocking input there would only lose keystrokes.
+    let everSynced = false;
     const onSync = (isSynced: boolean) => {
       setSynced(isSynced);
-      editor.updateOptions({ readOnly: !isSynced });
-      if (isSynced) {
+      if (isSynced && !everSynced) {
+        everSynced = true;
+        setEverReady(true);
+        editor.updateOptions({ readOnly: false });
         // Stamp the shared start time on the first sync if nobody has yet.
         if (ymeta.get('startedAt') == null) ymeta.set('startedAt', Date.now());
         setStartedAt(ymeta.get('startedAt') as number);
@@ -201,25 +307,41 @@ export function useCollabSession({
     if (provider.synced) onSync(true);
 
     // The server closes with a custom code to reject a connection: ROOM_FULL_CODE
-    // for a 3rd peer, ROOM_NOT_FOUND_CODE for a room no admin created. In both
-    // cases stop auto-reconnect and show the matching screen.
+    // for a 3rd peer, ROOM_NOT_FOUND_CODE for a room no admin created.
     const onClose = (event: CloseEvent) => {
       if (!event) return;
-      if (event.code === ROOM_FULL_CODE || event.code === ROOM_NOT_FOUND_CODE) {
-        if (event.code === ROOM_FULL_CODE) setFull(true);
-        else setNotFound(true);
+      if (event.code === ROOM_NOT_FOUND_CODE) {
+        setNotFound(true);
         provider.shouldConnect = false;
         provider.disconnect();
+        return;
+      }
+      if (event.code === ROOM_FULL_CODE) {
+        // A ROOM_FULL *after* we were already in the session is a transient
+        // reconnect collision (our previous socket hasn't been pruned yet). Let
+        // y-websocket retry — the server prunes the stale socket on the next
+        // attempt. Only a ROOM_FULL on the very first join is a genuine "full".
+        if (!everSynced) {
+          setFull(true);
+          provider.shouldConnect = false;
+          provider.disconnect();
+        }
       }
     };
     provider.on('connection-close', onClose);
 
     return () => {
+      disposed = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      if (cursorTimer) clearTimeout(cursorTimer);
+      clearInterval(divergencePoll);
+      ytext.unobserve(scheduleDivergenceCheck);
       ymeta.unobserve(applyLanguage);
       awareness.off('change', updatePresence);
       provider.off('status', onStatus);
       provider.off('sync', onSync);
       provider.off('connection-close', onClose);
+      contentSub.dispose();
       cursorSub.dispose();
       undoManager.destroy();
       binding.destroy();
@@ -245,12 +367,12 @@ export function useCollabSession({
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const setLanguage = (value: LanguageId) => {
+  const setLanguage = useCallback((value: LanguageId) => {
     // Write to the shared doc; the observer above updates both editors.
     ymetaRef.current?.set('language', value);
-  };
+  }, []);
 
-  const copyLink = async () => {
+  const copyLink = useCallback(async () => {
     try {
       await navigator.clipboard.writeText(window.location.href);
     } catch {
@@ -264,7 +386,7 @@ export function useCollabSession({
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  };
+  }, []);
 
   // Ready to edit only once connected AND the initial doc has synced.
   const ready = status === 'connected' && synced;
@@ -275,6 +397,7 @@ export function useCollabSession({
     status,
     synced,
     ready,
+    everReady,
     peers,
     participants,
     full,

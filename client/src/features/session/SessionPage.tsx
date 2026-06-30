@@ -66,14 +66,17 @@ export default function SessionPage() {
     navigate('/admin');
   };
 
-  // Which gate card (if any) covers the editor.
+  // Which gate card (if any) covers the editor. The blocking "connecting" card
+  // shows only until the FIRST sync (everReady); after that a transient
+  // reconnect leaves the editor in place (the StatusBar shows "Syncing…") so the
+  // session isn't interrupted mid-interview.
   const overlayMode: JoinMode | null = !joined
     ? 'form'
     : collab.full
       ? 'full'
       : collab.notFound
         ? 'notfound'
-        : !collab.ready
+        : !collab.everReady
           ? 'connecting'
           : null;
 

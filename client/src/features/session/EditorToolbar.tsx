@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react';
+import { memo, type ChangeEvent } from 'react';
 import { Brand } from '../../components/Brand';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import type { Theme } from '../../lib/theme';
@@ -23,7 +23,10 @@ interface Props {
   onToggleTheme: () => void;
 }
 
-export function EditorToolbar({
+// Memoized: presence/cursor churn re-renders SessionPage often; with stable
+// props (participants only change identity when the peer set changes, handlers
+// are useCallback'd) this component skips those re-renders.
+export const EditorToolbar = memo(function EditorToolbar({
   roomId,
   language,
   onLanguageChange,
@@ -109,4 +112,4 @@ export function EditorToolbar({
       <ThemeToggle theme={theme} onToggle={onToggleTheme} />
     </header>
   );
-}
+});

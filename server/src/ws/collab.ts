@@ -21,6 +21,13 @@ const { setupWSConnection } = require('y-websocket/bin/utils') as {
   ) => void;
 };
 
+// Garbage collection is disabled on the shared doc: this editor drives undo via
+// a client-side Y.UndoManager, and gc can drop the deleted-content history the
+// undo stack relies on. Keeping deleted items also removes a class of subtle
+// merge edge cases during the rapid backspace-and-retype the interview surface
+// sees. Cost is bounded — a single interview doc, in-memory, lost on restart.
+const DOC_GC = false;
+
 /** The room name is the WebSocket URL path (y-websocket connects to WS_URL/<room>). */
 function roomFromUrl(url: string | undefined): string {
   const pathname = (url ?? '/').slice(1).split('?')[0];
@@ -57,15 +64,15 @@ export function attachCollab(
       return;
     }
 
-    const count = rooms.add(room);
+    const count = rooms.add(room, ws);
     logger.info(`Peer joined room "${room}" (${count}/${config.maxUsersPerRoom})`);
 
     ws.once('close', () => {
-      const remaining = rooms.remove(room);
+      const remaining = rooms.remove(room, ws);
       logger.info(`Peer left room "${room}" (${remaining}/${config.maxUsersPerRoom})`);
     });
 
-    setupWSConnection(ws, req, { docName: room });
+    setupWSConnection(ws, req, { docName: room, gc: DOC_GC });
   });
 
   server.on('upgrade', (req: IncomingMessage, socket: Duplex, head: Buffer) => {
