@@ -1,4 +1,5 @@
 import type { ChangeEvent } from 'react';
+import { Brand } from '../../components/Brand';
 import { ThemeToggle } from '../../components/ThemeToggle';
 import type { Theme } from '../../lib/theme';
 import { formatClock } from '../../lib/format';
@@ -43,6 +44,9 @@ export function EditorToolbar({
 
   return (
     <header className="editor-bar">
+      <Brand size={22} />
+      <span className="bar-divider" />
+
       <span className="room-tag">
         /s/<span className="accent">{roomId}</span>
       </span>
